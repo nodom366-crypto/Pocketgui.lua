@@ -1,4 +1,4 @@
--- PocketGUI v17.1 (Super Cool Floating Button + Premium UI)
+-- PocketGUI v18.0 (Premium UI + MM2 Tab)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -11,9 +11,10 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 
 local state = {
     invisible=false, noclip=false, walkSpeed=16, 
-    speedBoost=false, xray=false, playerEsp=false,
+    speedBoost=false, xray=false, playerEsp=false, mm2Esp=false,
     noclipConn=nil, speedConn=nil,
-    playerEspConn=nil, playerHighlights={}, connections={}
+    playerEspConn=nil, playerHighlights={}, 
+    mm2EspConn=nil, mm2Highlights={}, connections={}
 }
 
 local function track(c) table.insert(state.connections, c) return c end
@@ -97,6 +98,86 @@ local function tpToPlayer(plr)
     if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
 end
 
+-- MM2 FEATURES
+local function getMM2Role(plr)
+    local char = plr.Character; if not char then return nil end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local n = tool.Name:lower()
+            if n:find("knife") or n:find("dagger") then return "Murderer" end
+            if n:find("gun") or n:find("revolver") or n:find("pistol") then return "Sheriff" end
+        end
+    end
+    local role = char:GetAttribute("Role") or char:GetAttribute("role") or plr:GetAttribute("Role")
+    if role then
+        local r = tostring(role):lower()
+        if r:find("murder") then return "Murderer" end
+        if r:find("sheriff") or r:find("gun") then return "Sheriff" end
+        if r:find("innoc") then return "Innocent" end
+    end
+    local backpack = plr:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                local n = tool.Name:lower()
+                if n:find("knife") or n:find("dagger") then return "Murderer" end
+                if n:find("gun") or n:find("revolver") or n:find("pistol") then return "Sheriff" end
+            end
+        end
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if hum and hum.Health > 0 then return "Innocent" end
+    return nil
+end
+
+local function setMM2Esp(on)
+    state.mm2Esp = on
+    if state.mm2EspConn then state.mm2EspConn:Disconnect() state.mm2EspConn = nil end
+    for _, h in pairs(state.mm2Highlights) do if h and h.Parent then h:Destroy() end end
+    state.mm2Highlights = {}
+    if not on then return end
+    state.mm2EspConn = track(RunService.Heartbeat:Connect(function()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Character then
+                local role = getMM2Role(plr); local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    local hl = state.mm2Highlights[plr.UserId]
+                    if not hl or not hl.Parent then
+                        hl = Instance.new("Highlight"); hl.FillTransparency = 0.55; hl.OutlineTransparency = 0; hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        hl.Parent = plr.Character; state.mm2Highlights[plr.UserId] = hl
+                    end
+                    if role == "Murderer" then hl.FillColor = Color3.fromRGB(255, 30, 30); hl.OutlineColor = Color3.fromRGB(255, 100, 100)
+                    elseif role == "Sheriff" then hl.FillColor = Color3.fromRGB(40, 120, 255); hl.OutlineColor = Color3.fromRGB(100, 180, 255)
+                    else hl.FillColor = Color3.fromRGB(40, 220, 80); hl.OutlineColor = Color3.fromRGB(100, 255, 140) end
+                end
+            end
+        end
+    end))
+end
+
+local function mm2KillAll()
+    local char = player.Character; if not char then return false end
+    local hasKnife = false
+    for _, tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and tool.Name:lower():find("knife") then hasKnife = true break end end
+    if not hasKnife then return false end
+    local root = getRoot(); if not root then return false end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); if pr then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
+        end
+    end
+    return true
+end
+
+local function mm2GrabGun()
+    local root = getRoot(); if not root then return false end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Tool") and (obj.Name:lower():find("gun") or obj.Name:lower():find("revolver")) then
+            root.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0)); return true
+        end
+    end
+    return false
+end
+
 -- ==========================================
 -- PREMIUM UI BUILD
 -- ==========================================
@@ -104,8 +185,8 @@ local gui = Instance.new("ScreenGui")
 gui.Name="PocketGUI"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=999; gui.Parent=pg
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 420, 0, 320)
-main.Position = UDim2.new(0.5, -210, 0.5, -160)
+main.Size = UDim2.new(0, 440, 0, 320) -- Wider for 4 tabs
+main.Position = UDim2.new(0.5, -220, 0.5, -160)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 24); main.BorderSizePixel = 0; main.Active = true; main.Parent = gui
 local mainCr = Instance.new("UICorner"); mainCr.CornerRadius = UDim.new(0,16); mainCr.Parent = main
 local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(120, 80, 255); mainStroke.Thickness = 2; mainStroke.Transparency = 0.3; mainStroke.Parent = main
@@ -131,7 +212,7 @@ local function createTab(text)
     return btn
 end
 
-local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS")
+local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2")
 
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -40, 1, -130); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
@@ -143,7 +224,7 @@ local function createPage()
     return p
 end
 
-local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage()
+local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage()
 
 local function createToggle(parent, text, posY)
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, -10, 0, 50); f.Position = UDim2.new(0, 0, 0, posY)
@@ -152,15 +233,12 @@ local function createToggle(parent, text, posY)
     local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, -100, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(255,255,255)
     lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 14; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = f
-    
     local switchBg = Instance.new("Frame"); switchBg.Size = UDim2.new(0, 50, 0, 28); switchBg.Position = UDim2.new(1, -65, 0.5, -14)
     switchBg.BackgroundColor3 = Color3.fromRGB(45,45,60); switchBg.Parent = f
     local sbCr = Instance.new("UICorner"); sbCr.CornerRadius = UDim.new(1, 0); sbCr.Parent = switchBg
-    
     local knob = Instance.new("Frame"); knob.Size = UDim2.new(0, 22, 0, 22); knob.Position = UDim2.new(0, 3, 0.5, -11)
     knob.BackgroundColor3 = Color3.fromRGB(150,150,150); knob.Parent = switchBg
     local kCr = Instance.new("UICorner"); kCr.CornerRadius = UDim.new(1, 0); kCr.Parent = knob
-    
     local btn = Instance.new("TextButton"); btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 1; btn.Text = ""; btn.Parent = f
     return btn, switchBg, knob
 end
@@ -179,6 +257,14 @@ local function createStepper(parent, text, posY)
     plus.BackgroundColor3 = Color3.fromRGB(60,180,90); plus.Text = "+"; plus.TextColor3 = Color3.fromRGB(255,255,255); plus.Font = Enum.Font.GothamBlack; plus.TextSize = 18; plus.Parent = f
     local pCr = Instance.new("UICorner"); pCr.CornerRadius = UDim.new(0,8); pCr.Parent = plus
     return lbl, minus, plus
+end
+
+local function createAction(parent, text, posY, color)
+    local btn = Instance.new("TextButton"); btn.Size = UDim2.new(1, -10, 0, 45); btn.Position = UDim2.new(0, 0, 0, posY)
+    btn.BackgroundColor3 = color or Color3.fromRGB(45,45,60); btn.Text = text; btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.Parent = parent
+    local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0,8); cr.Parent = btn
+    return btn
 end
 
 -- PAGE 1: MOVE
@@ -224,6 +310,11 @@ refreshPlayerList()
 Players.PlayerAdded:Connect(refreshPlayerList)
 Players.PlayerRemoving:Connect(refreshPlayerList)
 
+-- PAGE 4: MM2
+local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 0)
+local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(120,30,40))
+local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
+
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
 closeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55); closeBtn.Text = "HIDE MENU"; closeBtn.TextColor3 = Color3.fromRGB(200,200,220)
@@ -231,8 +322,8 @@ closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 14; closeBtn.BorderSi
 local cbCr = Instance.new("UICorner"); cbCr.CornerRadius = UDim.new(0,10); cbCr.Parent = closeBtn
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
-local allTabs = {tabMove, tabVisuals, tabPlayers}
-local allPages = {pageMove, pageVisuals, pagePlayers}
+local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2}
+local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2}
 
 local function selectTab(index)
     for i = 1, #allTabs do
@@ -265,6 +356,10 @@ invisBtn.MouseButton1Click:Connect(function() toggleInvis() animateToggle(invisB
 speedBtn.MouseButton1Click:Connect(function() setSpeedBoost(not state.speedBoost) animateToggle(speedBg, speedKnob, state.speedBoost) end)
 espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) animateToggle(espBg, espKnob, state.playerEsp) end)
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
+mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
+
+mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
+mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Text=s and "Teleported ✓" or "No Gun" task.delay(1.5,function() mm2GunBtn.Text="Grab Gun" end) end)
 
 speedMinus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed - 5, 16, 500)
@@ -282,11 +377,9 @@ local floatBtn = Instance.new("TextButton")
 floatBtn.Size = UDim2.new(0, 55, 0, 55); floatBtn.Position = UDim2.new(0, 20, 0.5, -27.5)
 floatBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 180); floatBtn.Text = ""; floatBtn.BorderSizePixel = 0; floatBtn.Parent = floatGui
 local fbCr = Instance.new("UICorner"); fbCr.CornerRadius = UDim.new(1, 0); fbCr.Parent = floatBtn
-
 local fbGrad = Instance.new("UIGradient")
 fbGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 80, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 150, 255))}
 fbGrad.Parent = floatBtn
-
 local fbStroke = Instance.new("UIStroke"); fbStroke.Color = Color3.fromRGB(200, 180, 255); fbStroke.Thickness = 2; fbStroke.Transparency = 0.2; fbStroke.Parent = floatBtn
 
 local fbIcon = Instance.new("Frame"); fbIcon.Size = UDim2.new(0, 22, 0, 18); fbIcon.Position = UDim2.new(0.5, -11, 0.5, -9)
@@ -296,13 +389,10 @@ for i = 0, 2 do
     line.BackgroundColor3 = Color3.fromRGB(255, 255, 255); line.BorderSizePixel = 0; line.Parent = fbIcon
 end
 
--- DRAG LOGIC
 local dragging, dragStart, startPos
 floatBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = floatBtn.Position
+        dragging = true; dragStart = input.Position; startPos = floatBtn.Position
     end
 end)
 floatBtn.InputChanged:Connect(function(input)
@@ -315,10 +405,8 @@ floatBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = false
         local delta = input.Position - dragStart
-        if delta.Magnitude < 10 then
-            main.Visible = not main.Visible
-        end
+        if delta.Magnitude < 10 then main.Visible = not main.Visible end
     end
 end)
 
-print("[PocketGUI] v17.1 Loaded! Super Cool Floating Button active.")
+print("[PocketGUI] v18.0 Loaded! MM2 Tab added.")
