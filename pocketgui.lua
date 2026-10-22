@@ -1,4 +1,4 @@
--- PocketGUI v18.0 (Premium UI + MM2 Tab)
+-- PocketGUI v19.0 (MM2 Tab Restored + Cool UI)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -185,7 +185,7 @@ local gui = Instance.new("ScreenGui")
 gui.Name="PocketGUI"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=999; gui.Parent=pg
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 440, 0, 320) -- Wider for 4 tabs
+main.Size = UDim2.new(0, 440, 0, 320)
 main.Position = UDim2.new(0.5, -220, 0.5, -160)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 24); main.BorderSizePixel = 0; main.Active = true; main.Parent = gui
 local mainCr = Instance.new("UICorner"); mainCr.CornerRadius = UDim.new(0,16); mainCr.Parent = main
@@ -409,4 +409,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v18.0 Loaded! MM2 Tab added.")
+print("[PocketGUI] v19.0 Loaded! MM2 Tab restored.")
