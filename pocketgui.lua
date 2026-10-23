@@ -1,4 +1,4 @@
--- PocketGUI v27.0 (Mobile New Features - No IY)
+-- PocketGUI v27.2 (Size Editor Replaces Anti-Fling)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -14,9 +14,9 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, tpMode=false, flingMode=false, skeletonEsp=false, selfChams=false,
-    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil, flingConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil,
+    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, charSize=1.0,
+    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil, sizeConn=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
@@ -107,33 +107,26 @@ local function enableTapTP(onButton)
     end))
 end
 
--- TOUCH FLING (NEW)
-local function enableFling(onButton)
-    if state.flingConn then state.flingConn:Disconnect() state.flingConn = nil end
-    state.flingMode = not state.flingMode
-    if not state.flingMode then onButton.Text = "Touch Fling" return end
-    onButton.Text = "Tap player..."
-    state.flingConn = track(UIS.InputBegan:Connect(function(input)
-        if not state.flingMode then return end
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local guiObj = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) or obj:IsDescendantOf(pg.PocketGUI_Float) then return end end
-            local mouseRay = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Exclude
-            params.FilterDescendantsInstances = {player.Character}
-            local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction * 1000, params)
-            if result and result.Instance then
-                local targetChar = result.Instance:FindFirstAncestorOfClass("Model")
-                local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-                if targetRoot then
-                    targetRoot.AssemblyLinearVelocity = Vector3.new(1000, 1000, 1000)
-                end
-            end
-            state.flingMode = false; onButton.Text = "Touch Fling"
-            if state.flingConn then state.flingConn:Disconnect() state.flingConn = nil end
+-- CHARACTER SIZE EDITOR (NEW)
+local function applySize(size)
+    state.charSize = size
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local scale = Instance.new("NumberValue")
+        scale.Name = "PocketGUI_Size"
+        scale.Value = size
+        -- Apply scale via HumanoidDescription or BodyScale
+        local desc = hum:FindFirstChildOfClass("HumanoidDescription")
+        if desc then
+            desc.Height = size
+            desc.Width = size
+            desc.Depth = size
+            desc.Head = size
+            hum:ApplyDescription(desc)
         end
-    end))
+    end
 end
 
 -- NOCLIP
@@ -201,7 +194,7 @@ local function setXRay(on)
     end
 end
 
--- SKELETON ESP (NEW)
+-- SKELETON ESP
 local function setSkeletonEsp(on)
     state.skeletonEsp = on
     if state.skeletonConn then state.skeletonConn:Disconnect() state.skeletonConn = nil end
@@ -211,7 +204,7 @@ local function setSkeletonEsp(on)
     state.skeletonConn = track(RunService.Heartbeat:Connect(function()
         for _, d in pairs(state.skeletonDrawings) do if d and d.Parent then d:Destroy() end end
         state.skeletonDrawings = {}
-        
+
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= player and plr.Character then
                 local char = plr.Character
@@ -221,7 +214,7 @@ local function setSkeletonEsp(on)
                 local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm")
                 local leftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg")
                 local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
-                
+
                 local function drawLine(p1, p2, color)
                     if p1 and p2 then
                         local dist = (p1.Position - p2.Position).Magnitude
@@ -236,7 +229,7 @@ local function setSkeletonEsp(on)
                         table.insert(state.skeletonDrawings, part)
                     end
                 end
-                
+
                 drawLine(head, root, Color3.fromRGB(255, 0, 0))
                 drawLine(root, leftArm, Color3.fromRGB(0, 255, 0))
                 drawLine(root, rightArm, Color3.fromRGB(0, 255, 0))
@@ -247,7 +240,7 @@ local function setSkeletonEsp(on)
     end))
 end
 
--- SELF CHAMS (NEW)
+-- SELF CHAMS
 local function setSelfChams(on)
     state.selfChams = on
     if state.selfChamsConn then state.selfChamsConn:Disconnect() state.selfChamsConn = nil end
@@ -574,7 +567,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.0"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.2"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -662,9 +655,9 @@ local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16
 local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
 local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
 local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
-local resetBtn = createAction(pageMove, "Respawn (Reset)", 420, Color3.fromRGB(220, 60, 80))
-local tpBtn = createAction(pageMove, "Click Teleport", 475, Color3.fromRGB(80, 60, 180))
-local flingBtn = createAction(pageMove, "Touch Fling", 530, Color3.fromRGB(200, 60, 80))
+local sizeLabel, sizeMinus, sizePlus = createStepper(pageMove, "Size: 1.0", 420)
+local tpBtn = createAction(pageMove, "Click Teleport", 480, Color3.fromRGB(80, 60, 180))
+local resetBtn = createAction(pageMove, "Respawn (Reset)", 535, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 0)
@@ -778,7 +771,6 @@ hussTackleBtn.MouseButton1Click:Connect(function() setHussAutoTackle(not state.h
 hussEspBtn.MouseButton1Click:Connect(function() setHussEsp(not state.hussEsp) animateToggle(hussEspBg, hussEspKnob, state.hussEsp) end)
 
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
-flingBtn.MouseButton1Click:Connect(function() enableFling(flingBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
 
 mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
@@ -800,6 +792,17 @@ end)
 flySpeedPlus.MouseButton1Click:Connect(function()
     state.flySpeed = math.clamp(state.flySpeed + 50, 10, 1000)
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
+end)
+
+sizeMinus.MouseButton1Click:Connect(function()
+    state.charSize = math.clamp(state.charSize - 0.1, 0.5, 3.0)
+    sizeLabel.Text = string.format("Size: %.1f", state.charSize)
+    applySize(state.charSize)
+end)
+sizePlus.MouseButton1Click:Connect(function()
+    state.charSize = math.clamp(state.charSize + 0.1, 0.5, 3.0)
+    sizeLabel.Text = string.format("Size: %.1f", state.charSize)
+    applySize(state.charSize)
 end)
 
 -- FLOATING BUTTON
@@ -841,4 +844,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print(" thank you for using PocketGUI ")
+print("[PocketGUI] v27.2 Loaded! Size Editor added, Anti-Fling removed.")
