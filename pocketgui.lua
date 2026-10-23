@@ -1,4 +1,4 @@
--- PocketGUI v23.2 (Fixed Fly & Speed Boost)
+-- PocketGUI v24.0 (Disaster & Utility Added)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -17,7 +17,9 @@ local state = {
     flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
     noclipConn=nil, speedConn=nil, jumpConn=nil,
     playerEspConn=nil, playerHighlights={}, 
-    mm2EspConn=nil, mm2Highlights={}, connections={}
+    mm2EspConn=nil, mm2Highlights={}, connections={},
+    -- New States
+    ndsGodmode=false, ndsAutoWin=false, infJump=false
 }
 
 local function track(c) table.insert(state.connections, c) return c end
@@ -76,7 +78,6 @@ local function setFly(on)
             hum.MaxHealth = 100
             hum.Health = 100
             hum.PlatformStand = false
-            -- Do NOT reset WalkSpeed here, let the Speed Boost handle it.
         end
     end)
 end
@@ -91,7 +92,7 @@ local function enableTapTP(onButton)
         if not state.tpMode then return end
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             local guiObj = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) then return end end
+            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) or obj:IsDescendantOf(pg.PocketGUI_Float) then return end end
             local ray = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
             local params = RaycastParams.new()
             params.FilterType = Enum.RaycastFilterType.Exclude
@@ -130,7 +131,7 @@ local function setSpeedBoost(on)
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
     if not on then 
         local h = getHum()
-        if h then h.WalkSpeed = 16 end -- Reset to normal when turning off
+        if h then h.WalkSpeed = 16 end
         return 
     end
     state.speedConn=track(RunService.Heartbeat:Connect(function()
@@ -144,7 +145,7 @@ local function setHighJump(on)
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
     if not on then 
         local h = getHum()
-        if h then h.JumpPower = 50 end -- Reset to normal when turning off
+        if h then h.JumpPower = 50 end
         return 
     end
     state.jumpConn = track(RunService.Heartbeat:Connect(function()
@@ -257,7 +258,9 @@ local function mm2KillAll()
     local root = getRoot(); if not root then return false end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
-            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); if pr then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); 
+            if pr and hum and hum.Health > 0 then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
         end
     end
     return true
@@ -302,6 +305,67 @@ local function tpToPlayer(plr)
 end
 
 -- ==========================================
+-- NATURAL DISASTER SURVIVAL LOGIC (NEW)
+-- ==========================================
+local function setNDSGodmode(on)
+    state.ndsGodmode = on
+    if state.ndsGodConn then state.ndsGodConn:Disconnect() state.ndsGodConn = nil end
+    if not on then return end
+    
+    state.ndsGodConn = track(RunService.Heartbeat:Connect(function()
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health < hum.MaxHealth then
+                hum.Health = hum.MaxHealth
+            end
+        end
+    end))
+end
+
+local function setNDSAutoWin(on)
+    state.ndsAutoWin = on
+    if state.ndsWinConn then state.ndsWinConn:Disconnect() state.ndsWinConn = nil end
+    if not on then return end
+
+    state.ndsWinConn = track(RunService.Heartbeat:Connect(function()
+        local root = getRoot()
+        local winnerTower = workspace:FindFirstChild("Winner") or workspace:FindFirstChild("Victory")
+        
+        if root and winnerTower then
+            local towerPart = winnerTower:IsA("BasePart") and winnerTower or winnerTower:FindFirstChildWhichIsA("BasePart")
+            if towerPart then
+                root.CFrame = CFrame.new(towerPart.Position + Vector3.new(0, 5, 0))
+            end
+        end
+    end))
+end
+
+-- ==========================================
+-- UNIVERSAL UTILITY LOGIC (NEW)
+-- ==========================================
+local function setInfJump(on)
+    state.infJump = on
+    if state.infJumpConn then state.infJumpConn:Disconnect() state.infJumpConn = nil end
+    if not on then return end
+
+    state.infJumpConn = track(UIS.JumpRequest:Connect(function()
+        if state.infJump then
+            local hum = getHum()
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end))
+end
+
+local function loadInfiniteYield()
+    local success, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+    end)
+    return success
+end
+
+
+-- ==========================================
 -- PREMIUM UI BUILD
 -- ==========================================
 local gui = Instance.new("ScreenGui")
@@ -316,7 +380,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v24"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -336,6 +400,7 @@ local function createTab(text)
 end
 
 local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2")
+local tabDisaster = createTab("DISASTER"); local tabUtility = createTab("UTILITY")
 
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -40, 1, -170); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
@@ -348,6 +413,7 @@ local function createPage()
 end
 
 local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage()
+local pageDisaster=createPage() local pageUtility=createPage()
 
 local function createToggle(parent, text, posY)
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, -10, 0, 50); f.Position = UDim2.new(0, 0, 0, posY)
@@ -443,6 +509,14 @@ local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 0)
 local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(120,30,40))
 local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
 
+-- PAGE 5: DISASTER (NEW)
+local godBtn, godBg, godKnob = createToggle(pageDisaster, "Godmode (Survive All)", 0)
+local winBtn, winBg, winKnob = createToggle(pageDisaster, "Auto-Win (TP to Tower)", 60)
+
+-- PAGE 6: UTILITY (NEW)
+local infJumpBtn, infJumpBg, infJumpKnob = createToggle(pageUtility, "Infinite Jump", 0)
+local iyBtn = createAction(pageUtility, "Load Infinite Yield (Admin)", 60, Color3.fromRGB(180, 60, 180))
+
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
 closeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55); closeBtn.Text = "HIDE MENU"; closeBtn.TextColor3 = Color3.fromRGB(200,200,220)
@@ -450,8 +524,8 @@ closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 14; closeBtn.BorderSi
 local cbCr = Instance.new("UICorner"); cbCr.CornerRadius = UDim.new(0,10); cbCr.Parent = closeBtn
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
-local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2}
-local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2}
+local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabDisaster, tabUtility}
+local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageDisaster, pageUtility}
 
 local function selectTab(index)
     for i = 1, #allTabs do
@@ -487,6 +561,17 @@ xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateTogg
 mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
+
+-- New Connections
+godBtn.MouseButton1Click:Connect(function() setNDSGodmode(not state.ndsGodmode) animateToggle(godBg, godKnob, state.ndsGodmode) end)
+winBtn.MouseButton1Click:Connect(function() setNDSAutoWin(not state.ndsAutoWin) animateToggle(winBg, winKnob, state.ndsAutoWin) end)
+infJumpBtn.MouseButton1Click:Connect(function() setInfJump(not state.infJump) animateToggle(infJumpBg, infJumpKnob, state.infJump) end)
+iyBtn.MouseButton1Click:Connect(function() 
+    iyBtn.Text = "Loading IY..."
+    local s = loadInfiniteYield()
+    iyBtn.Text = s and "IY Loaded! (Check Chat)" or "Failed to Load"
+    task.delay(2, function() iyBtn.Text = "Load Infinite Yield (Admin)" end)
+end)
 
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
@@ -551,4 +636,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v23.2 Loaded! Fly & Speed Boost fixed.")
+print("[PocketGUI] v24.0 Loaded! Disaster & Utility tabs added.")
