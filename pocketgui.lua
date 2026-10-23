@@ -1,7 +1,8 @@
--- PocketGUI v22.0 (Joystick + Camera Fly + Godmode)
+-- PocketGUI v23.1 (Fly Speed up to 1000)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -10,10 +11,10 @@ if pg:FindFirstChild("PocketGUI") then pg.PocketGUI:Destroy() end
 if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 
 local state = {
-    flying=false, invisible=false, noclip=false, walkSpeed=16, jumpPower=50,
+    flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, 
-    flyConn=nil, bodyVelocity=nil, bodyGyro=nil,
+    flySpeed=60, tpMode=false,
+    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
     noclipConn=nil, speedConn=nil, jumpConn=nil,
     playerEspConn=nil, playerHighlights={}, 
     mm2EspConn=nil, mm2Highlights={}, connections={}
@@ -29,7 +30,7 @@ local function setFly(on)
     local char = player.Character
     local root = getRoot()
     local hum = getHum()
-    
+
     if state.flyConn then state.flyConn:Disconnect() state.flyConn = nil end
     if state.bodyVelocity then state.bodyVelocity:Destroy() state.bodyVelocity = nil end
     if state.bodyGyro then state.bodyGyro:Destroy() state.bodyGyro = nil end
@@ -39,7 +40,6 @@ local function setFly(on)
         return 
     end
 
-    -- Godmode to stop anti-cheat from killing you in the air
     hum.PlatformStand = true
     hum.MaxHealth = math.huge
     hum.Health = math.huge
@@ -57,25 +57,19 @@ local function setFly(on)
 
     state.flyConn = track(RunService.RenderStepped:Connect(function()
         if not state.flying or not root or not root.Parent then return end
-        
-        -- GPT Movement Style: Joystick + Camera
         local move = hum.MoveDirection
         local look = camera.CFrame.LookVector
-        
         local horizontal = Vector3.new(move.X, 0, move.Z)
         local vertical = look.Y * move.Magnitude
         local direction = horizontal + Vector3.new(0, vertical, 0)
-        
         if direction.Magnitude > 0 then
             state.bodyVelocity.Velocity = direction.Unit * state.flySpeed
         else
             state.bodyVelocity.Velocity = Vector3.zero
         end
-        
         state.bodyGyro.CFrame = camera.CFrame
     end))
-    
-    -- Reset health when Fly is turned off
+
     task.spawn(function()
         while state.flying do task.wait(0.5) end
         if hum then
@@ -84,6 +78,29 @@ local function setFly(on)
             hum.PlatformStand = false
         end
     end)
+end
+
+-- CLICK TELEPORT
+local function enableTapTP(onButton)
+    if state.tpConn then state.tpConn:Disconnect() state.tpConn = nil end
+    state.tpMode = not state.tpMode
+    if not state.tpMode then onButton.Text = "Click Teleport" return end
+    onButton.Text = "Tap anywhere..."
+    state.tpConn = track(UIS.InputBegan:Connect(function(input)
+        if not state.tpMode then return end
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local guiObj = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) then return end end
+            local ray = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = {player.Character}
+            local result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
+            if result then local root = getRoot(); if root then root.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0)) end end
+            state.tpMode = false; onButton.Text = "Click Teleport"
+            if state.tpConn then state.tpConn:Disconnect() state.tpConn = nil end
+        end
+    end))
 end
 
 -- FIXED NOCLIP
@@ -102,19 +119,6 @@ local function setNoclip(on)
     else
         for _,p in ipairs(c:GetDescendants()) do
             if p:IsA("BasePart") then p.CanCollide=true end
-        end
-    end
-end
-
--- LOCAL INVISIBILITY
-local function toggleInvis()
-    state.invisible = not state.invisible
-    local c=player.Character; if not c then return end
-    for _,p in ipairs(c:GetDescendants()) do
-        if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
-            p.LocalTransparencyModifier = state.invisible and 1 or 0
-        elseif p:IsA("Decal") then 
-            p.Transparency = state.invisible and 1 or 0 
         end
     end
 end
@@ -388,7 +392,7 @@ local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 36
 local resetBtn = createAction(pageMove, "Respawn (Reset)", 420, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
-local invisBtn, invisBg, invisKnob = createToggle(pageVisuals, "Invisibility (Local)", 0)
+local tpBtn = createAction(pageVisuals, "Click Teleport", 0, Color3.fromRGB(80, 60, 180))
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
 local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
 
@@ -410,14 +414,14 @@ local function refreshPlayerList()
             nameLbl.Size = UDim2.new(1, -120, 1, 0); nameLbl.Position = UDim2.new(0, 15, 0, 0)
             nameLbl.BackgroundTransparency = 1; nameLbl.Text = plr.Name; nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
             nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 14; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
-            
-            local tpBtn = Instance.new("TextButton")
-            tpBtn.Size = UDim2.new(0, 85, 1, -14); tpBtn.Position = UDim2.new(1, -100, 0, 7)
-            tpBtn.BackgroundColor3 = Color3.fromRGB(60,120,200); tpBtn.Text = "Teleport"
-            tpBtn.TextColor3 = Color3.fromRGB(255,255,255); tpBtn.Font = Enum.Font.GothamBold; tpBtn.TextSize = 13; tpBtn.Parent = row
-            local tcr = Instance.new("UICorner"); tcr.CornerRadius = UDim.new(0,8); tcr.Parent = tpBtn
-            
-            tpBtn.MouseButton1Click:Connect(function() tpToPlayer(plr) end)
+
+            local tpPlayerBtn = Instance.new("TextButton")
+            tpPlayerBtn.Size = UDim2.new(0, 85, 1, -14); tpPlayerBtn.Position = UDim2.new(1, -100, 0, 7)
+            tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,120,200); tpPlayerBtn.Text = "Teleport"
+            tpPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); tpPlayerBtn.Font = Enum.Font.GothamBold; tpPlayerBtn.TextSize = 13; tpPlayerBtn.Parent = row
+            local tcr = Instance.new("UICorner"); tcr.CornerRadius = UDim.new(0,8); tcr.Parent = tpPlayerBtn
+
+            tpPlayerBtn.MouseButton1Click:Connect(function() tpToPlayer(plr) end)
         end
     end
 end
@@ -468,7 +472,6 @@ end
 
 flyBtn.MouseButton1Click:Connect(function() setFly(not state.flying) animateToggle(flyBg, flyKnob, state.flying) end)
 noclipBtn.MouseButton1Click:Connect(function() setNoclip(not state.noclip) animateToggle(noclipBg, noclipKnob, state.noclip) end)
-invisBtn.MouseButton1Click:Connect(function() toggleInvis() animateToggle(invisBg, invisKnob, state.invisible) end)
 speedBtn.MouseButton1Click:Connect(function() setSpeedBoost(not state.speedBoost) animateToggle(speedBg, speedKnob, state.speedBoost) end)
 espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) animateToggle(espBg, espKnob, state.playerEsp) end)
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
@@ -476,6 +479,7 @@ mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) anima
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
 
+tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
 
 mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
@@ -491,11 +495,11 @@ speedPlus.MouseButton1Click:Connect(function()
 end)
 
 flySpeedMinus.MouseButton1Click:Connect(function()
-    state.flySpeed = math.clamp(state.flySpeed - 10, 10, 300)
+    state.flySpeed = math.clamp(state.flySpeed - 50, 10, 1000) -- Changed limit to 1000 and step to 50
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 flySpeedPlus.MouseButton1Click:Connect(function()
-    state.flySpeed = math.clamp(state.flySpeed + 10, 10, 300)
+    state.flySpeed = math.clamp(state.flySpeed + 50, 10, 1000) -- Changed limit to 1000 and step to 50
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
@@ -538,4 +542,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v22.0 Loaded! Joystick + Camera Fly active.")
+print("[PocketGUI] v23.1 Loaded! Fly Speed up to 1000.")
