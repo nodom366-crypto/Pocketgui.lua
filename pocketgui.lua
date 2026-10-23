@@ -1,4 +1,4 @@
--- PocketGUI v23.1 (Fly Speed up to 1000)
+-- PocketGUI v23.2 (Fixed Fly & Speed Boost)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -24,7 +24,7 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY (Joystick + Camera)
+-- FLY (Fixed Godmode Cleanup)
 local function setFly(on)
     state.flying = on
     local char = player.Character
@@ -76,6 +76,7 @@ local function setFly(on)
             hum.MaxHealth = 100
             hum.Health = 100
             hum.PlatformStand = false
+            -- Do NOT reset WalkSpeed here, let the Speed Boost handle it.
         end
     end)
 end
@@ -123,11 +124,15 @@ local function setNoclip(on)
     end
 end
 
--- SPEED BOOST
+-- FIXED SPEED BOOST
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
-    if not on then return end
+    if not on then 
+        local h = getHum()
+        if h then h.WalkSpeed = 16 end -- Reset to normal when turning off
+        return 
+    end
     state.speedConn=track(RunService.Heartbeat:Connect(function()
         local h=getHum(); if h then h.WalkSpeed=state.walkSpeed end
     end))
@@ -137,7 +142,11 @@ end
 local function setHighJump(on)
     state.highJump = on
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
-    if not on then return end
+    if not on then 
+        local h = getHum()
+        if h then h.JumpPower = 50 end -- Reset to normal when turning off
+        return 
+    end
     state.jumpConn = track(RunService.Heartbeat:Connect(function()
         local h = getHum()
         if h then h.JumpPower = state.jumpPower end
@@ -495,11 +504,11 @@ speedPlus.MouseButton1Click:Connect(function()
 end)
 
 flySpeedMinus.MouseButton1Click:Connect(function()
-    state.flySpeed = math.clamp(state.flySpeed - 50, 10, 1000) -- Changed limit to 1000 and step to 50
+    state.flySpeed = math.clamp(state.flySpeed - 50, 10, 1000)
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 flySpeedPlus.MouseButton1Click:Connect(function()
-    state.flySpeed = math.clamp(state.flySpeed + 50, 10, 1000) -- Changed limit to 1000 and step to 50
+    state.flySpeed = math.clamp(state.flySpeed + 50, 10, 1000)
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
@@ -542,4 +551,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v23.1 Loaded! Fly Speed up to 1000.")
+print("[PocketGUI] v23.2 Loaded! Fly & Speed Boost fixed.")
