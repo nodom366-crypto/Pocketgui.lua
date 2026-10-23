@@ -1,18 +1,20 @@
--- PocketGUI v19.0 (MM2 Tab Restored + Cool UI)
+-- PocketGUI v22.0 (Joystick + Camera Fly + Godmode)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
 local pg = player:WaitForChild("PlayerGui")
 if pg:FindFirstChild("PocketGUI") then pg.PocketGUI:Destroy() end
 if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 
 local state = {
-    invisible=false, noclip=false, walkSpeed=16, 
-    speedBoost=false, xray=false, playerEsp=false, mm2Esp=false,
-    noclipConn=nil, speedConn=nil,
+    flying=false, invisible=false, noclip=false, walkSpeed=16, jumpPower=50,
+    speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
+    flySpeed=60, 
+    flyConn=nil, bodyVelocity=nil, bodyGyro=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil,
     playerEspConn=nil, playerHighlights={}, 
     mm2EspConn=nil, mm2Highlights={}, connections={}
 }
@@ -21,29 +23,103 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FEATURES
+-- FLY (Joystick + Camera)
+local function setFly(on)
+    state.flying = on
+    local char = player.Character
+    local root = getRoot()
+    local hum = getHum()
+    
+    if state.flyConn then state.flyConn:Disconnect() state.flyConn = nil end
+    if state.bodyVelocity then state.bodyVelocity:Destroy() state.bodyVelocity = nil end
+    if state.bodyGyro then state.bodyGyro:Destroy() state.bodyGyro = nil end
+
+    if not on or not root or not hum then 
+        if hum then hum.PlatformStand = false end
+        return 
+    end
+
+    -- Godmode to stop anti-cheat from killing you in the air
+    hum.PlatformStand = true
+    hum.MaxHealth = math.huge
+    hum.Health = math.huge
+
+    state.bodyVelocity = Instance.new("BodyVelocity")
+    state.bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    state.bodyVelocity.Velocity = Vector3.zero
+    state.bodyVelocity.Parent = root
+
+    state.bodyGyro = Instance.new("BodyGyro")
+    state.bodyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+    state.bodyGyro.P = 10000
+    state.bodyGyro.CFrame = camera.CFrame
+    state.bodyGyro.Parent = root
+
+    state.flyConn = track(RunService.RenderStepped:Connect(function()
+        if not state.flying or not root or not root.Parent then return end
+        
+        -- GPT Movement Style: Joystick + Camera
+        local move = hum.MoveDirection
+        local look = camera.CFrame.LookVector
+        
+        local horizontal = Vector3.new(move.X, 0, move.Z)
+        local vertical = look.Y * move.Magnitude
+        local direction = horizontal + Vector3.new(0, vertical, 0)
+        
+        if direction.Magnitude > 0 then
+            state.bodyVelocity.Velocity = direction.Unit * state.flySpeed
+        else
+            state.bodyVelocity.Velocity = Vector3.zero
+        end
+        
+        state.bodyGyro.CFrame = camera.CFrame
+    end))
+    
+    -- Reset health when Fly is turned off
+    task.spawn(function()
+        while state.flying do task.wait(0.5) end
+        if hum then
+            hum.MaxHealth = 100
+            hum.Health = 100
+            hum.PlatformStand = false
+        end
+    end)
+end
+
+-- FIXED NOCLIP
 local function setNoclip(on)
     state.noclip=on
     if state.noclipConn then state.noclipConn:Disconnect() state.noclipConn=nil end
-    if not on then return end
-    state.noclipConn=track(RunService.Stepped:Connect(function()
-        local c=player.Character; if not c then return end
+    local c = player.Character
+    if not c then return end
+    if on then
+        state.noclipConn=track(RunService.Stepped:Connect(function()
+            local char=player.Character; if not char then return end
+            for _,p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") and p.CanCollide then p.CanCollide=false end
+            end
+        end))
+    else
         for _,p in ipairs(c:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then p.CanCollide=false end
+            if p:IsA("BasePart") then p.CanCollide=true end
         end
-    end))
-end
-
-local function toggleInvis()
-    state.invisible=not state.invisible
-    local c=player.Character; if not c then return end
-    for _,p in ipairs(c:GetDescendants()) do
-        if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
-            p.LocalTransparencyModifier=state.invisible and 1 or 0
-        elseif p:IsA("Decal") then p.Transparency=state.invisible and 1 or 0 end
     end
 end
 
+-- LOCAL INVISIBILITY
+local function toggleInvis()
+    state.invisible = not state.invisible
+    local c=player.Character; if not c then return end
+    for _,p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
+            p.LocalTransparencyModifier = state.invisible and 1 or 0
+        elseif p:IsA("Decal") then 
+            p.Transparency = state.invisible and 1 or 0 
+        end
+    end
+end
+
+-- SPEED BOOST
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
@@ -53,6 +129,18 @@ local function setSpeedBoost(on)
     end))
 end
 
+-- HIGH JUMP
+local function setHighJump(on)
+    state.highJump = on
+    if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
+    if not on then return end
+    state.jumpConn = track(RunService.Heartbeat:Connect(function()
+        local h = getHum()
+        if h then h.JumpPower = state.jumpPower end
+    end))
+end
+
+-- XRAY
 local xrayOriginals = {}
 local function setXRay(on)
     state.xray = on
@@ -68,6 +156,7 @@ local function setXRay(on)
     end
 end
 
+-- PLAYER ESP
 local function setPlayerEsp(on)
     state.playerEsp = on
     if state.playerEspConn then state.playerEspConn:Disconnect() state.playerEspConn = nil end
@@ -89,13 +178,6 @@ local function setPlayerEsp(on)
             end
         end
     end))
-end
-
-local function tpToPlayer(plr)
-    local myRoot = getRoot()
-    local targetChar = workspace:FindFirstChild(plr.Name)
-    local tRoot = targetChar and (targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso"))
-    if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
 end
 
 -- MM2 FEATURES
@@ -178,6 +260,34 @@ local function mm2GrabGun()
     return false
 end
 
+-- ANTI AFK
+local function setAntiAfk(on)
+    state.antiAfk = on
+    if state.antiAfkConn then state.antiAfkConn:Disconnect() state.antiAfkConn = nil end
+    if not on then return end
+    state.antiAfkConn = track(player.Idled:Connect(function()
+        local vu = game:GetService("VirtualUser")
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+    end))
+end
+
+-- RESPAWN
+local function respawnPlayer()
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end
+end
+
+local function tpToPlayer(plr)
+    local myRoot = getRoot()
+    local targetChar = workspace:FindFirstChild(plr.Name)
+    local tRoot = targetChar and (targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso"))
+    if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
+end
+
 -- ==========================================
 -- PREMIUM UI BUILD
 -- ==========================================
@@ -185,8 +295,8 @@ local gui = Instance.new("ScreenGui")
 gui.Name="PocketGUI"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=999; gui.Parent=pg
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 440, 0, 320)
-main.Position = UDim2.new(0.5, -220, 0.5, -160)
+main.Size = UDim2.new(0, 440, 0, 360)
+main.Position = UDim2.new(0.5, -220, 0.5, -180)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 24); main.BorderSizePixel = 0; main.Active = true; main.Parent = gui
 local mainCr = Instance.new("UICorner"); mainCr.CornerRadius = UDim.new(0,16); mainCr.Parent = main
 local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(120, 80, 255); mainStroke.Thickness = 2; mainStroke.Transparency = 0.3; mainStroke.Parent = main
@@ -215,7 +325,7 @@ end
 local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2")
 
 local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -40, 1, -130); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
+content.Size = UDim2.new(1, -40, 1, -170); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
 
 local function createPage()
     local p = Instance.new("ScrollingFrame")
@@ -268,12 +378,17 @@ local function createAction(parent, text, posY, color)
 end
 
 -- PAGE 1: MOVE
-local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 0)
-local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16", 60)
-local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 120)
+local flyBtn, flyBg, flyKnob = createToggle(pageMove, "Enable Fly", 0)
+local flySpeedLabel, flySpeedMinus, flySpeedPlus = createStepper(pageMove, "Fly Speed: 60", 60)
+local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 120)
+local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16", 180)
+local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
+local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
+local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
+local resetBtn = createAction(pageMove, "Respawn (Reset)", 420, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
-local invisBtn, invisBg, invisKnob = createToggle(pageVisuals, "Invisibility", 0)
+local invisBtn, invisBg, invisKnob = createToggle(pageVisuals, "Invisibility (Local)", 0)
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
 local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
 
@@ -351,12 +466,17 @@ local function animateToggle(bg, knob, isOn)
     end
 end
 
+flyBtn.MouseButton1Click:Connect(function() setFly(not state.flying) animateToggle(flyBg, flyKnob, state.flying) end)
 noclipBtn.MouseButton1Click:Connect(function() setNoclip(not state.noclip) animateToggle(noclipBg, noclipKnob, state.noclip) end)
 invisBtn.MouseButton1Click:Connect(function() toggleInvis() animateToggle(invisBg, invisKnob, state.invisible) end)
 speedBtn.MouseButton1Click:Connect(function() setSpeedBoost(not state.speedBoost) animateToggle(speedBg, speedKnob, state.speedBoost) end)
 espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) animateToggle(espBg, espKnob, state.playerEsp) end)
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
 mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
+antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
+highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
+
+resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
 
 mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
 mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Text=s and "Teleported ✓" or "No Gun" task.delay(1.5,function() mm2GunBtn.Text="Grab Gun" end) end)
@@ -368,6 +488,15 @@ end)
 speedPlus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed + 5, 16, 500)
     speedLabel.Text = "WalkSpeed: " .. state.walkSpeed
+end)
+
+flySpeedMinus.MouseButton1Click:Connect(function()
+    state.flySpeed = math.clamp(state.flySpeed - 10, 10, 300)
+    flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
+end)
+flySpeedPlus.MouseButton1Click:Connect(function()
+    state.flySpeed = math.clamp(state.flySpeed + 10, 10, 300)
+    flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
 -- SUPER COOL DRAGGABLE FLOATING BUTTON
@@ -409,4 +538,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v19.0 Loaded! MM2 Tab restored.")
+print("[PocketGUI] v22.0 Loaded! Joystick + Camera Fly active.")
