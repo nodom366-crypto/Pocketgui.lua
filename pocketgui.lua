@@ -1,4 +1,4 @@
--- PocketGUI v27.2 (Size Editor Replaces Anti-Fling)
+-- PocketGUI v27.4 (Full Script)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -15,7 +15,7 @@ local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
     flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, charSize=1.0,
-    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
+    flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
     noclipConn=nil, speedConn=nil, jumpConn=nil, sizeConn=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
@@ -28,7 +28,7 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY
+-- FLY (True Godmode Fix)
 local function setFly(on)
     state.flying = on
     local char = player.Character
@@ -36,6 +36,7 @@ local function setFly(on)
     local hum = getHum()
 
     if state.flyConn then state.flyConn:Disconnect() state.flyConn = nil end
+    if state.healthConn then state.healthConn:Disconnect() state.healthConn = nil end
     if state.bodyVelocity then state.bodyVelocity:Destroy() state.bodyVelocity = nil end
     if state.bodyGyro then state.bodyGyro:Destroy() state.bodyGyro = nil end
 
@@ -45,8 +46,16 @@ local function setFly(on)
     end
 
     hum.PlatformStand = true
-    hum.MaxHealth = math.huge
-    hum.Health = math.huge
+    
+    -- Force health to stay at 100 to prevent anti-cheat/fall damage deaths
+    hum.MaxHealth = 100
+    hum.Health = 100
+    
+    state.healthConn = track(hum.HealthChanged:Connect(function(newHealth)
+        if state.flying and newHealth < 100 then
+            hum.Health = 100
+        end
+    end))
 
     state.bodyVelocity = Instance.new("BodyVelocity")
     state.bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
@@ -76,9 +85,7 @@ local function setFly(on)
 
     task.spawn(function()
         while state.flying do task.wait(0.5) end
-        if hum then
-            hum.MaxHealth = 100
-            hum.Health = 100
+        if hum and hum.Parent then
             hum.PlatformStand = false
         end
     end)
@@ -107,27 +114,41 @@ local function enableTapTP(onButton)
     end))
 end
 
--- CHARACTER SIZE EDITOR (NEW)
+-- CHARACTER SIZE EDITOR (Fixed)
 local function applySize(size)
     state.charSize = size
     local char = player.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        local scale = Instance.new("NumberValue")
-        scale.Name = "PocketGUI_Size"
-        scale.Value = size
-        -- Apply scale via HumanoidDescription or BodyScale
-        local desc = hum:FindFirstChildOfClass("HumanoidDescription")
-        if desc then
-            desc.Height = size
-            desc.Width = size
-            desc.Depth = size
-            desc.Head = size
-            hum:ApplyDescription(desc)
+    if not hum then return end
+
+    if hum.RigType == Enum.HumanoidRigType.R15 then
+        hum.BodyHeightScale = size
+        hum.BodyWidthScale  = size
+        hum.BodyDepthScale  = size
+        hum.HeadScale       = size
+    else
+        local scaleMap = {
+            ["Head"]      = Vector3.new(2, 1, 1),
+            ["Torso"]     = Vector3.new(2, 2, 1),
+            ["Left Arm"]  = Vector3.new(1, 2, 1),
+            ["Right Arm"] = Vector3.new(1, 2, 1),
+            ["Left Leg"]  = Vector3.new(1, 2, 1),
+            ["Right Leg"] = Vector3.new(1, 2, 1),
+        }
+        for name, base in pairs(scaleMap) do
+            local part = char:FindFirstChild(name)
+            if part and part:IsA("BasePart") then
+                part.Size = base * size
+            end
         end
     end
 end
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.2)
+    applySize(state.charSize)
+end)
 
 -- NOCLIP
 local function setNoclip(on)
@@ -346,13 +367,18 @@ end
 local function mm2KillAll()
     local char = player.Character; if not char then return false end
     local hasKnife = false
-    for _, tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and tool.Name:lower():find("knife") then hasKnife = true break end end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name:lower():find("knife") then
+            hasKnife = true
+            break
+        end
+    end
     if not hasKnife then return false end
     local root = getRoot(); if not root then return false end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
             local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); 
+            local pr = plr.Character:FindFirstChild("HumanoidRootPart")
             if pr and hum and hum.Health > 0 then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
         end
     end
@@ -567,7 +593,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.2"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.4"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -844,4 +870,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v27.2 Loaded! Size Editor added, Anti-Fling removed.")
+print("Thank you for using PocketGUI")
