@@ -1,4 +1,4 @@
--- PocketGUI v24.0 (Disaster & Utility Added)
+-- PocketGUI v24.5 (Scrollable Tabs & IY Removed)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -18,7 +18,6 @@ local state = {
     noclipConn=nil, speedConn=nil, jumpConn=nil,
     playerEspConn=nil, playerHighlights={}, 
     mm2EspConn=nil, mm2Highlights={}, connections={},
-    -- New States
     ndsGodmode=false, ndsAutoWin=false, infJump=false
 }
 
@@ -26,7 +25,7 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY (Fixed Godmode Cleanup)
+-- FLY
 local function setFly(on)
     state.flying = on
     local char = player.Character
@@ -105,7 +104,7 @@ local function enableTapTP(onButton)
     end))
 end
 
--- FIXED NOCLIP
+-- NOCLIP
 local function setNoclip(on)
     state.noclip=on
     if state.noclipConn then state.noclipConn:Disconnect() state.noclipConn=nil end
@@ -125,7 +124,7 @@ local function setNoclip(on)
     end
 end
 
--- FIXED SPEED BOOST
+-- SPEED BOOST
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
@@ -304,21 +303,16 @@ local function tpToPlayer(plr)
     if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
 end
 
--- ==========================================
--- NATURAL DISASTER SURVIVAL LOGIC (NEW)
--- ==========================================
+-- DISASTER LOGIC
 local function setNDSGodmode(on)
     state.ndsGodmode = on
     if state.ndsGodConn then state.ndsGodConn:Disconnect() state.ndsGodConn = nil end
     if not on then return end
-    
     state.ndsGodConn = track(RunService.Heartbeat:Connect(function()
         local char = player.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health < hum.MaxHealth then
-                hum.Health = hum.MaxHealth
-            end
+            if hum and hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
         end
     end))
 end
@@ -327,28 +321,21 @@ local function setNDSAutoWin(on)
     state.ndsAutoWin = on
     if state.ndsWinConn then state.ndsWinConn:Disconnect() state.ndsWinConn = nil end
     if not on then return end
-
     state.ndsWinConn = track(RunService.Heartbeat:Connect(function()
         local root = getRoot()
         local winnerTower = workspace:FindFirstChild("Winner") or workspace:FindFirstChild("Victory")
-        
         if root and winnerTower then
             local towerPart = winnerTower:IsA("BasePart") and winnerTower or winnerTower:FindFirstChildWhichIsA("BasePart")
-            if towerPart then
-                root.CFrame = CFrame.new(towerPart.Position + Vector3.new(0, 5, 0))
-            end
+            if towerPart then root.CFrame = CFrame.new(towerPart.Position + Vector3.new(0, 5, 0)) end
         end
     end))
 end
 
--- ==========================================
--- UNIVERSAL UTILITY LOGIC (NEW)
--- ==========================================
+-- UTILITY LOGIC
 local function setInfJump(on)
     state.infJump = on
     if state.infJumpConn then state.infJumpConn:Disconnect() state.infJumpConn = nil end
     if not on then return end
-
     state.infJumpConn = track(UIS.JumpRequest:Connect(function()
         if state.infJump then
             local hum = getHum()
@@ -356,14 +343,6 @@ local function setInfJump(on)
         end
     end))
 end
-
-local function loadInfiniteYield()
-    local success, err = pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
-    end)
-    return success
-end
-
 
 -- ==========================================
 -- PREMIUM UI BUILD
@@ -380,21 +359,26 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v24"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v24.5"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
 titleGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 100, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 200, 255))}
 titleGrad.Parent = title
 
-local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, -40, 0, 40); tabBar.Position = UDim2.new(0, 20, 0, 55); tabBar.BackgroundTransparency = 1; tabBar.Parent = main
-local tabLayout = Instance.new("UIListLayout"); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.Padding = UDim.new(0, 8); tabLayout.Parent = tabBar
+-- 🛠️ FIXED SCROLLING TAB BAR
+local tabScroll = Instance.new("ScrollingFrame")
+tabScroll.Size = UDim2.new(1, -40, 0, 40); tabScroll.Position = UDim2.new(0, 20, 0, 55)
+tabScroll.BackgroundTransparency = 1; tabScroll.BorderSizePixel = 0; tabScroll.ScrollBarThickness = 0
+tabScroll.CanvasSize = UDim2.new(0,0,0,0); tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabScroll.ScrollingDirection = Enum.ScrollingDirection.X; tabScroll.Parent = main
+
+local tabLayout = Instance.new("UIListLayout"); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.Padding = UDim.new(0, 8); tabLayout.Parent = tabScroll
 
 local function createTab(text)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 85, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(30, 30, 42); btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(150, 150, 170); btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.BorderSizePixel = 0; btn.Parent = tabBar
+    btn.TextColor3 = Color3.fromRGB(150, 150, 170); btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.BorderSizePixel = 0; btn.Parent = tabScroll
     local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0, 10); cr.Parent = btn
     return btn
 end
@@ -509,13 +493,13 @@ local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 0)
 local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(120,30,40))
 local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
 
--- PAGE 5: DISASTER (NEW)
+-- PAGE 5: DISASTER
 local godBtn, godBg, godKnob = createToggle(pageDisaster, "Godmode (Survive All)", 0)
 local winBtn, winBg, winKnob = createToggle(pageDisaster, "Auto-Win (TP to Tower)", 60)
 
--- PAGE 6: UTILITY (NEW)
+-- PAGE 6: UTILITY
 local infJumpBtn, infJumpBg, infJumpKnob = createToggle(pageUtility, "Infinite Jump", 0)
-local iyBtn = createAction(pageUtility, "Load Infinite Yield (Admin)", 60, Color3.fromRGB(180, 60, 180))
+-- IY Button Removed
 
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
@@ -562,16 +546,9 @@ mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) anima
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
 
--- New Connections
 godBtn.MouseButton1Click:Connect(function() setNDSGodmode(not state.ndsGodmode) animateToggle(godBg, godKnob, state.ndsGodmode) end)
 winBtn.MouseButton1Click:Connect(function() setNDSAutoWin(not state.ndsAutoWin) animateToggle(winBg, winKnob, state.ndsAutoWin) end)
 infJumpBtn.MouseButton1Click:Connect(function() setInfJump(not state.infJump) animateToggle(infJumpBg, infJumpKnob, state.infJump) end)
-iyBtn.MouseButton1Click:Connect(function() 
-    iyBtn.Text = "Loading IY..."
-    local s = loadInfiniteYield()
-    iyBtn.Text = s and "IY Loaded! (Check Chat)" or "Failed to Load"
-    task.delay(2, function() iyBtn.Text = "Load Infinite Yield (Admin)" end)
-end)
 
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
@@ -597,7 +574,7 @@ flySpeedPlus.MouseButton1Click:Connect(function()
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
--- SUPER COOL DRAGGABLE FLOATING BUTTON
+-- FLOATING BUTTON
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name="PocketGUI_Float"; floatGui.ResetOnSpawn=false; floatGui.DisplayOrder=1000; floatGui.Parent=pg
 local floatBtn = Instance.new("TextButton")
@@ -636,4 +613,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v24.0 Loaded! Disaster & Utility tabs added.")
+print("[PocketGUI] v24.5 Loaded! Scrolling tabs added, IY removed.")
