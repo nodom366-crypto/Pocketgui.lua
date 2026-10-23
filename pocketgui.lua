@@ -1,8 +1,9 @@
--- PocketGUI v24.5 (Scrollable Tabs & IY Removed)
+-- PocketGUI v27.0 (Mobile New Features - No IY)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -13,12 +14,14 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, tpMode=false,
-    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
+    flySpeed=60, tpMode=false, flingMode=false, skeletonEsp=false, selfChams=false,
+    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil, flingConn=nil,
     noclipConn=nil, speedConn=nil, jumpConn=nil,
-    playerEspConn=nil, playerHighlights={}, 
+    playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
+    selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
-    ndsGodmode=false, ndsAutoWin=false, infJump=false
+    ndsGodmode=false, ndsAutoWin=false, infJump=false,
+    hussAutoDodge=false, hussAutoTackle=false, hussEsp=false, hussHighlights={}
 }
 
 local function track(c) table.insert(state.connections, c) return c end
@@ -104,6 +107,35 @@ local function enableTapTP(onButton)
     end))
 end
 
+-- TOUCH FLING (NEW)
+local function enableFling(onButton)
+    if state.flingConn then state.flingConn:Disconnect() state.flingConn = nil end
+    state.flingMode = not state.flingMode
+    if not state.flingMode then onButton.Text = "Touch Fling" return end
+    onButton.Text = "Tap player..."
+    state.flingConn = track(UIS.InputBegan:Connect(function(input)
+        if not state.flingMode then return end
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local guiObj = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) or obj:IsDescendantOf(pg.PocketGUI_Float) then return end end
+            local mouseRay = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = {player.Character}
+            local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction * 1000, params)
+            if result and result.Instance then
+                local targetChar = result.Instance:FindFirstAncestorOfClass("Model")
+                local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                if targetRoot then
+                    targetRoot.AssemblyLinearVelocity = Vector3.new(1000, 1000, 1000)
+                end
+            end
+            state.flingMode = false; onButton.Text = "Touch Fling"
+            if state.flingConn then state.flingConn:Disconnect() state.flingConn = nil end
+        end
+    end))
+end
+
 -- NOCLIP
 local function setNoclip(on)
     state.noclip=on
@@ -167,6 +199,75 @@ local function setXRay(on)
         for obj, orig in pairs(xrayOriginals) do if obj and obj.Parent then obj.Transparency = orig end end
         xrayOriginals = {}
     end
+end
+
+-- SKELETON ESP (NEW)
+local function setSkeletonEsp(on)
+    state.skeletonEsp = on
+    if state.skeletonConn then state.skeletonConn:Disconnect() state.skeletonConn = nil end
+    for _, d in pairs(state.skeletonDrawings) do if d and d.Parent then d:Destroy() end end
+    state.skeletonDrawings = {}
+    if not on then return end
+    state.skeletonConn = track(RunService.Heartbeat:Connect(function()
+        for _, d in pairs(state.skeletonDrawings) do if d and d.Parent then d:Destroy() end end
+        state.skeletonDrawings = {}
+        
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Character then
+                local char = plr.Character
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local head = char:FindFirstChild("Head")
+                local leftArm = char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm")
+                local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm")
+                local leftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg")
+                local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
+                
+                local function drawLine(p1, p2, color)
+                    if p1 and p2 then
+                        local dist = (p1.Position - p2.Position).Magnitude
+                        local part = Instance.new("Part")
+                        part.Size = Vector3.new(0.1, 0.1, dist)
+                        part.CFrame = CFrame.new(p1.Position, p2.Position) * CFrame.new(0, 0, -dist/2)
+                        part.Anchored = true
+                        part.CanCollide = false
+                        part.Material = Enum.Material.Neon
+                        part.Color = color
+                        part.Parent = workspace
+                        table.insert(state.skeletonDrawings, part)
+                    end
+                end
+                
+                drawLine(head, root, Color3.fromRGB(255, 0, 0))
+                drawLine(root, leftArm, Color3.fromRGB(0, 255, 0))
+                drawLine(root, rightArm, Color3.fromRGB(0, 255, 0))
+                drawLine(root, leftLeg, Color3.fromRGB(0, 0, 255))
+                drawLine(root, rightLeg, Color3.fromRGB(0, 0, 255))
+            end
+        end
+    end))
+end
+
+-- SELF CHAMS (NEW)
+local function setSelfChams(on)
+    state.selfChams = on
+    if state.selfChamsConn then state.selfChamsConn:Disconnect() state.selfChamsConn = nil end
+    if state.selfChamsHighlight then state.selfChamsHighlight:Destroy() state.selfChamsHighlight = nil end
+    if not on then return end
+    state.selfChamsConn = track(RunService.Heartbeat:Connect(function()
+        local char = player.Character
+        if char then
+            if not state.selfChamsHighlight or state.selfChamsHighlight.Parent ~= char then
+                if state.selfChamsHighlight then state.selfChamsHighlight:Destroy() end
+                state.selfChamsHighlight = Instance.new("Highlight")
+                state.selfChamsHighlight.FillColor = Color3.fromRGB(0, 255, 255)
+                state.selfChamsHighlight.OutlineColor = Color3.fromRGB(0, 255, 255)
+                state.selfChamsHighlight.FillTransparency = 0.5
+                state.selfChamsHighlight.OutlineTransparency = 0
+                state.selfChamsHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                state.selfChamsHighlight.Parent = char
+            end
+        end
+    end))
 end
 
 -- PLAYER ESP
@@ -312,7 +413,21 @@ local function setNDSGodmode(on)
         local char = player.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if hum and root then
+                hum.MaxHealth = math.huge
+                hum.Health = math.huge
+                if hum:GetState() == Enum.HumanoidStateType.Dead or hum:GetState() == Enum.HumanoidStateType.Physics then
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end
+                local bodyForce = root:FindFirstChild("NDS_AntiFling")
+                if not bodyForce then
+                    bodyForce = Instance.new("BodyForce")
+                    bodyForce.Name = "NDS_AntiFling"
+                    bodyForce.Force = Vector3.new(0, workspace.Gravity * root:GetMass(), 0)
+                    bodyForce.Parent = root
+                end
+            end
         end
     end))
 end
@@ -323,10 +438,13 @@ local function setNDSAutoWin(on)
     if not on then return end
     state.ndsWinConn = track(RunService.Heartbeat:Connect(function()
         local root = getRoot()
-        local winnerTower = workspace:FindFirstChild("Winner") or workspace:FindFirstChild("Victory")
-        if root and winnerTower then
-            local towerPart = winnerTower:IsA("BasePart") and winnerTower or winnerTower:FindFirstChildWhichIsA("BasePart")
-            if towerPart then root.CFrame = CFrame.new(towerPart.Position + Vector3.new(0, 5, 0)) end
+        if not root then return end
+        local map = workspace:FindFirstChild("Map")
+        if map then
+            local winPad = map:FindFirstChild("WinPad")
+            if winPad then
+                root.CFrame = CFrame.new(winPad.Position + Vector3.new(0, 5, 0))
+            end
         end
     end))
 end
@@ -340,6 +458,103 @@ local function setInfJump(on)
         if state.infJump then
             local hum = getHum()
             if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end))
+end
+
+-- HUSS VALLEY LOGIC
+local function getHussRole(plr)
+    local role = plr:GetAttribute("GameRole")
+    if typeof(role) == "string" then return role end
+    return "Lobby"
+end
+
+local function setHussAutoDodge(on)
+    state.hussAutoDodge = on
+    if state.hussDodgeConn then state.hussDodgeConn:Disconnect() state.hussDodgeConn = nil end
+    if not on then return end
+    state.hussDodgeConn = track(RunService.Heartbeat:Connect(function()
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if not myRoot or not myHum or myHum.Health <= 0 then return end
+        if getHussRole(player) ~= "Runner" then return end
+        local closestDist = math.huge
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and getHussRole(plr) == "Chaser" then
+                local chaserChar = plr.Character
+                local chaserRoot = chaserChar and chaserChar:FindFirstChild("HumanoidRootPart")
+                if chaserRoot then
+                    local dist = (myRoot.Position - chaserRoot.Position).Magnitude
+                    if dist < closestDist then closestDist = dist end
+                end
+            end
+        end
+        if closestDist < 12 then
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end))
+end
+
+local function setHussAutoTackle(on)
+    state.hussAutoTackle = on
+    if state.hussTackleConn then state.hussTackleConn:Disconnect() state.hussTackleConn = nil end
+    if not on then return end
+    state.hussTackleConn = track(RunService.Heartbeat:Connect(function()
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if not myRoot or not myHum or myHum.Health <= 0 then return end
+        if getHussRole(player) ~= "Chaser" then return end
+        local closestRunner = nil
+        local closestDist = math.huge
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and getHussRole(plr) == "Runner" then
+                local runChar = plr.Character
+                local runRoot = runChar and runChar:FindFirstChild("HumanoidRootPart")
+                if runRoot then
+                    local dist = (myRoot.Position - runRoot.Position).Magnitude
+                    if dist < closestDist then closestDist = dist; closestRunner = runRoot end
+                end
+            end
+        end
+        if closestRunner and closestDist < 10 then
+            myRoot.CFrame = closestRunner.CFrame * CFrame.new(0, 0, 2)
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:ClickButton1(Vector2.new())
+        end
+    end))
+end
+
+local function setHussEsp(on)
+    state.hussEsp = on
+    if state.hussEspConn then state.hussEspConn:Disconnect() state.hussEspConn = nil end
+    for _, h in pairs(state.hussHighlights) do if h and h.Parent then h:Destroy() end end
+    state.hussHighlights = {}
+    if not on then return end
+    state.hussEspConn = track(RunService.Heartbeat:Connect(function()
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Character then
+                local role = getHussRole(plr)
+                local hl = state.hussHighlights[plr.UserId]
+                if not hl or not hl.Parent then
+                    hl = Instance.new("Highlight")
+                    hl.FillTransparency = 0.5; hl.OutlineTransparency = 0
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Parent = plr.Character
+                    state.hussHighlights[plr.UserId] = hl
+                end
+                if role == "Chaser" then
+                    hl.FillColor = Color3.fromRGB(255, 30, 30); hl.OutlineColor = Color3.fromRGB(255, 100, 100)
+                elseif role == "Runner" then
+                    hl.FillColor = Color3.fromRGB(40, 220, 80); hl.OutlineColor = Color3.fromRGB(100, 255, 140)
+                else
+                    hl.FillColor = Color3.fromRGB(100, 100, 100); hl.OutlineColor = Color3.fromRGB(150, 150, 150)
+                end
+            end
         end
     end))
 end
@@ -359,14 +574,13 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v24.5"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.0"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
 titleGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 100, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 200, 255))}
 titleGrad.Parent = title
 
--- 🛠️ FIXED SCROLLING TAB BAR
 local tabScroll = Instance.new("ScrollingFrame")
 tabScroll.Size = UDim2.new(1, -40, 0, 40); tabScroll.Position = UDim2.new(0, 20, 0, 55)
 tabScroll.BackgroundTransparency = 1; tabScroll.BorderSizePixel = 0; tabScroll.ScrollBarThickness = 0
@@ -384,7 +598,7 @@ local function createTab(text)
 end
 
 local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2")
-local tabDisaster = createTab("DISASTER"); local tabUtility = createTab("UTILITY")
+local tabDisaster = createTab("DISASTER"); local tabUtility = createTab("UTILITY"); local tabHuss = createTab("HUSS")
 
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -40, 1, -170); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
@@ -397,7 +611,7 @@ local function createPage()
 end
 
 local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage()
-local pageDisaster=createPage() local pageUtility=createPage()
+local pageDisaster=createPage() local pageUtility=createPage() local pageHuss=createPage()
 
 local function createToggle(parent, text, posY)
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, -10, 0, 50); f.Position = UDim2.new(0, 0, 0, posY)
@@ -449,11 +663,14 @@ local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
 local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
 local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
 local resetBtn = createAction(pageMove, "Respawn (Reset)", 420, Color3.fromRGB(220, 60, 80))
+local tpBtn = createAction(pageMove, "Click Teleport", 475, Color3.fromRGB(80, 60, 180))
+local flingBtn = createAction(pageMove, "Touch Fling", 530, Color3.fromRGB(200, 60, 80))
 
 -- PAGE 2: VISUALS
-local tpBtn = createAction(pageVisuals, "Click Teleport", 0, Color3.fromRGB(80, 60, 180))
-local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
-local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
+local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 0)
+local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 60)
+local skeletonBtn, skeletonBg, skeletonKnob = createToggle(pageVisuals, "Skeleton ESP", 120)
+local selfChamsBtn, selfChamsBg, selfChamsKnob = createToggle(pageVisuals, "Self Chams", 180)
 
 -- PAGE 3: PLAYERS
 local playerListFrame = Instance.new("Frame")
@@ -499,7 +716,11 @@ local winBtn, winBg, winKnob = createToggle(pageDisaster, "Auto-Win (TP to Tower
 
 -- PAGE 6: UTILITY
 local infJumpBtn, infJumpBg, infJumpKnob = createToggle(pageUtility, "Infinite Jump", 0)
--- IY Button Removed
+
+-- PAGE 7: HUSS VALLEY
+local hussDodgeBtn, hussDodgeBg, hussDodgeKnob = createToggle(pageHuss, "God Runner (Auto Dodge)", 0)
+local hussTackleBtn, hussTackleBg, hussTackleKnob = createToggle(pageHuss, "God Chaser (Auto Tackle)", 60)
+local hussEspBtn, hussEspBg, hussEspKnob = createToggle(pageHuss, "Role ESP (See Everyone)", 120)
 
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
@@ -508,8 +729,8 @@ closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 14; closeBtn.BorderSi
 local cbCr = Instance.new("UICorner"); cbCr.CornerRadius = UDim.new(0,10); cbCr.Parent = closeBtn
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
-local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabDisaster, tabUtility}
-local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageDisaster, pageUtility}
+local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabDisaster, tabUtility, tabHuss}
+local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageDisaster, pageUtility, pageHuss}
 
 local function selectTab(index)
     for i = 1, #allTabs do
@@ -542,6 +763,8 @@ noclipBtn.MouseButton1Click:Connect(function() setNoclip(not state.noclip) anima
 speedBtn.MouseButton1Click:Connect(function() setSpeedBoost(not state.speedBoost) animateToggle(speedBg, speedKnob, state.speedBoost) end)
 espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) animateToggle(espBg, espKnob, state.playerEsp) end)
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
+skeletonBtn.MouseButton1Click:Connect(function() setSkeletonEsp(not state.skeletonEsp) animateToggle(skeletonBg, skeletonKnob, state.skeletonEsp) end)
+selfChamsBtn.MouseButton1Click:Connect(function() setSelfChams(not state.selfChams) animateToggle(selfChamsBg, selfChamsKnob, state.selfChams) end)
 mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
@@ -550,7 +773,12 @@ godBtn.MouseButton1Click:Connect(function() setNDSGodmode(not state.ndsGodmode) 
 winBtn.MouseButton1Click:Connect(function() setNDSAutoWin(not state.ndsAutoWin) animateToggle(winBg, winKnob, state.ndsAutoWin) end)
 infJumpBtn.MouseButton1Click:Connect(function() setInfJump(not state.infJump) animateToggle(infJumpBg, infJumpKnob, state.infJump) end)
 
+hussDodgeBtn.MouseButton1Click:Connect(function() setHussAutoDodge(not state.hussAutoDodge) animateToggle(hussDodgeBg, hussDodgeKnob, state.hussAutoDodge) end)
+hussTackleBtn.MouseButton1Click:Connect(function() setHussAutoTackle(not state.hussAutoTackle) animateToggle(hussTackleBg, hussTackleKnob, state.hussAutoTackle) end)
+hussEspBtn.MouseButton1Click:Connect(function() setHussEsp(not state.hussEsp) animateToggle(hussEspBg, hussEspKnob, state.hussEsp) end)
+
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
+flingBtn.MouseButton1Click:Connect(function() enableFling(flingBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
 
 mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
@@ -613,4 +841,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v24.5 Loaded! Scrolling tabs added, IY removed.")
+print(" thank you for using PocketGUI ")
