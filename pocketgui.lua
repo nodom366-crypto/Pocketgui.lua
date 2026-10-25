@@ -1,7 +1,4 @@
--- PocketGUI v29.0 (Ultimate Aggressive Invis & Features)
--- Created for Brookhaven and general Roblox games.
--- Total Lines: ~920
-
+-- PocketGUI v29.2 (Ultimate Brookhaven Invisibility)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -31,9 +28,7 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- ==========================================
--- FLY LOGIC (Godmode included)
--- ==========================================
+-- FLY
 local function setFly(on)
     state.flying = on
     local root = getRoot()
@@ -86,9 +81,7 @@ local function setFly(on)
     end)
 end
 
--- ==========================================
 -- CLICK TELEPORT
--- ==========================================
 local function enableTapTP(onButton)
     if state.tpConn then state.tpConn:Disconnect() state.tpConn = nil end
     state.tpMode = not state.tpMode
@@ -111,104 +104,50 @@ local function enableTapTP(onButton)
     end))
 end
 
--- ==========================================
--- ULTIMATE AGGRESSIVE INVISIBILITY (110%)
--- ==========================================
+-- INVISIBILITY (THE FLICKER METHOD)
 local function setInvisible(on)
     state.invisible = on
-    
-    -- Clean up old connections
     if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
-    if state.invisHealthConn then state.invisHealthConn:Disconnect() state.invisHealthConn = nil end
     
     local char = player.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
 
-    -- TURN INVIS OFF
     if not on then
         if hum then 
-            hum.Health = 100
+            hum.CameraOffset = Vector3.zero 
             hum.DisplayName = player.DisplayName
             hum.NameDisplayDistance = 100
             hum.HealthDisplayDistance = 100
         end
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.Transparency = 0
-                    p.LocalTransparencyModifier = 0
-                    p.CanCollide = true
-                elseif p:IsA("Decal") or p:IsA("Texture") then
-                    p.Transparency = 0
-                end
-            end
-        end
         return
     end
 
-    -- TURN INVIS ON
     if not hum or not root then return end
 
-    -- 1. Erase Name and Health Tags
     hum.DisplayName = " "
     hum.NameDisplayDistance = 0
     hum.HealthDisplayDistance = 0
 
-    -- 2. Erase All Visual Attachments (Hats, Hair, Accessories)
-    for _, p in ipairs(char:GetDescendants()) do
-        if p:IsA("Accessory") then
-            p:Destroy()
-        end
-    end
+    -- The 60 FPS Flicker to hide from other players
+    state.invisConn = track(RunService.Heartbeat:Connect(function()
+        if not state.invisible or not hum or not root then return end
+        local OriginalCFrame = root.CFrame
+        local OriginalCameraOffset = hum.CameraOffset
 
-    -- 3. The 110% Render Loop (Overrides Anti-Cheat Transparency resets)
-    state.invisConn = track(RunService.RenderStepped:Connect(function()
-        local c = player.Character
-        if c then
-            for _, p in ipairs(c:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.Transparency = 1
-                    p.LocalTransparencyModifier = 1
-                    p.CanCollide = false
-                elseif p:IsA("Decal") or p:IsA("Texture") then
-                    p.Transparency = 1
-                end
-            end
-            
-            -- Add a Ghost Highlight to hide names for other players
-            local hl = c:FindFirstChild("GhostHighlight")
-            if not hl then
-                hl = Instance.new("Highlight")
-                hl.Name = "GhostHighlight"
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.FillTransparency = 1
-                hl.OutlineTransparency = 1
-                hl.Parent = c
-            end
-        end
-    end))
+        local DownCFrame = OriginalCFrame * CFrame.new(0, -200000, 0)
+        root.CFrame = DownCFrame
+        hum.CameraOffset = DownCFrame:ToObjectSpace(CFrame.new(OriginalCFrame.Position)).Position
 
-    -- 4. Anti-Reset Protection (If Brookhaven tries to kill you, we stop it)
-    state.invisHealthConn = track(hum.HealthChanged:Connect(function(health)
-        if health <= 0 and state.invisible then
-            -- Immediately revive and hide again
-            task.wait(0.1)
-            local newHum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-            if newHum then
-                newHum.Health = 100
-                newHum.DisplayName = " "
-                newHum.NameDisplayDistance = 0
-                newHum.HealthDisplayDistance = 0
-            end
-        end
+        game:GetService("RunService").RenderStepped:Wait()
+
+        root.CFrame = OriginalCFrame
+        hum.CameraOffset = OriginalCameraOffset
     end))
 end
 
--- ==========================================
 -- NOCLIP
--- ==========================================
 local function setNoclip(on)
     state.noclip=on
     if state.noclipConn then state.noclipConn:Disconnect() state.noclipConn=nil end
@@ -228,9 +167,7 @@ local function setNoclip(on)
     end
 end
 
--- ==========================================
 -- SPEED BOOST
--- ==========================================
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
@@ -244,9 +181,7 @@ local function setSpeedBoost(on)
     end))
 end
 
--- ==========================================
 -- HIGH JUMP
--- ==========================================
 local function setHighJump(on)
     state.highJump = on
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
@@ -261,9 +196,7 @@ local function setHighJump(on)
     end))
 end
 
--- ==========================================
 -- XRAY
--- ==========================================
 local xrayOriginals = {}
 local function setXRay(on)
     state.xray = on
@@ -279,9 +212,7 @@ local function setXRay(on)
     end
 end
 
--- ==========================================
 -- SKELETON ESP
--- ==========================================
 local function setSkeletonEsp(on)
     state.skeletonEsp = on
     if state.skeletonConn then state.skeletonConn:Disconnect() state.skeletonConn = nil end
@@ -327,9 +258,7 @@ local function setSkeletonEsp(on)
     end))
 end
 
--- ==========================================
 -- SELF CHAMS
--- ==========================================
 local function setSelfChams(on)
     state.selfChams = on
     if state.selfChamsConn then state.selfChamsConn:Disconnect() state.selfChamsConn = nil end
@@ -352,9 +281,7 @@ local function setSelfChams(on)
     end))
 end
 
--- ==========================================
 -- PLAYER ESP
--- ==========================================
 local function setPlayerEsp(on)
     state.playerEsp = on
     if state.playerEspConn then state.playerEspConn:Disconnect() state.playerEspConn = nil end
@@ -378,9 +305,7 @@ local function setPlayerEsp(on)
     end))
 end
 
--- ==========================================
 -- MM2 FEATURES
--- ==========================================
 local function getMM2Role(plr)
     local char = plr.Character; if not char then return nil end
     for _, tool in ipairs(char:GetChildren()) do
@@ -467,9 +392,7 @@ local function mm2GrabGun()
     return false
 end
 
--- ==========================================
--- ANTI AFK & RESPAWN
--- ==========================================
+-- ANTI AFK
 local function setAntiAfk(on)
     state.antiAfk = on
     if state.antiAfkConn then state.antiAfkConn:Disconnect() state.antiAfkConn = nil end
@@ -481,6 +404,7 @@ local function setAntiAfk(on)
     end))
 end
 
+-- RESPAWN
 local function respawnPlayer()
     local char = player.Character
     if char then
@@ -496,9 +420,7 @@ local function tpToPlayer(plr)
     if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
 end
 
--- ==========================================
 -- DISASTER LOGIC
--- ==========================================
 local function setNDSGodmode(on)
     state.ndsGodmode = on
     if state.ndsGodConn then state.ndsGodConn:Disconnect() state.ndsGodConn = nil end
@@ -543,9 +465,7 @@ local function setNDSAutoWin(on)
     end))
 end
 
--- ==========================================
 -- UTILITY LOGIC
--- ==========================================
 local function setInfJump(on)
     state.infJump = on
     if state.infJumpConn then state.infJumpConn:Disconnect() state.infJumpConn = nil end
@@ -558,9 +478,7 @@ local function setInfJump(on)
     end))
 end
 
--- ==========================================
 -- HUSS VALLEY LOGIC
--- ==========================================
 local function getHussRole(plr)
     local role = plr:GetAttribute("GameRole")
     if typeof(role) == "string" then return role end
@@ -672,7 +590,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v29.0"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v29.2"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
