@@ -1,9 +1,8 @@
--- PocketGUI v27.6 (Server Invis & Size Editor Removed)
+-- PocketGUI v27.8 (Aggressive Server Invis & TP Loop)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -16,7 +15,7 @@ local state = {
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
     flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, invisible=false,
     flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil, tpLoop=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
@@ -28,10 +27,9 @@ local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY (True Godmode Fix)
+-- FLY
 local function setFly(on)
     state.flying = on
-    local char = player.Character
     local root = getRoot()
     local hum = getHum()
 
@@ -50,9 +48,7 @@ local function setFly(on)
     hum.Health = 100
 
     state.healthConn = track(hum.HealthChanged:Connect(function(newHealth)
-        if state.flying and newHealth < 100 then
-            hum.Health = 100
-        end
+        if state.flying and newHealth < 100 then hum.Health = 100 end
     end))
 
     state.bodyVelocity = Instance.new("BodyVelocity")
@@ -69,10 +65,7 @@ local function setFly(on)
     state.flyConn = track(RunService.RenderStepped:Connect(function()
         if not state.flying or not root or not root.Parent then return end
         local move = hum.MoveDirection
-        local look = camera.CFrame.LookVector
-        local horizontal = Vector3.new(move.X, 0, move.Z)
-        local vertical = look.Y * move.Magnitude
-        local direction = horizontal + Vector3.new(0, vertical, 0)
+        local direction = Vector3.new(move.X, 0, move.Z) + Vector3.new(0, camera.CFrame.LookVector.Y * move.Magnitude, 0)
         if direction.Magnitude > 0 then
             state.bodyVelocity.Velocity = direction.Unit * state.flySpeed
         else
@@ -83,9 +76,7 @@ local function setFly(on)
 
     task.spawn(function()
         while state.flying do task.wait(0.5) end
-        if hum and hum.Parent then
-            hum.PlatformStand = false
-        end
+        if hum and hum.Parent then hum.PlatformStand = false end
     end)
 end
 
@@ -112,21 +103,18 @@ local function enableTapTP(onButton)
     end))
 end
 
--- INVISIBILITY (Server-Side Replication Fix)
+-- INVISIBILITY (Aggressive Server-Side + Auto-TP on Respawn)
 local function setInvisible(on)
     state.invisible = on
     if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
+    if state.tpLoop then state.tpLoop:Disconnect() state.tpLoop = nil end
+
     local char = player.Character
-    
+
     if not on then
         if char then
             for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.LocalTransparencyModifier = 0
-                    p.Transparency = 0
-                elseif p:IsA("Decal") or p:IsA("Texture") then
-                    p.Transparency = 0
-                end
+                if p:IsA("BasePart") then p.Transparency = 0 end
             end
             local hl = char:FindFirstChild("InvisHighlight")
             if hl then hl:Destroy() end
@@ -134,26 +122,38 @@ local function setInvisible(on)
         return
     end
 
+    -- Save position to TP back to if the server resets us
+    local savedPos = getRoot() and getRoot().CFrame or CFrame.new()
+
+    -- Teleport immediately when character respawns (because the server killed us)
+    state.tpLoop = player.CharacterAdded:Connect(function(newChar)
+        task.wait(0.1)
+        local newRoot = newChar:WaitForChild("HumanoidRootPart", 5)
+        if newRoot then
+            newRoot.CFrame = savedPos
+        end
+    end)
+
     state.invisConn = track(RunService.Stepped:Connect(function()
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
+        local c = player.Character
+        if c then
+            for _, p in ipairs(c:GetDescendants()) do
                 if p:IsA("BasePart") then
-                    p.LocalTransparencyModifier = 1
                     p.Transparency = 1
                 elseif p:IsA("Decal") or p:IsA("Texture") then
                     p.Transparency = 1
                 end
             end
             
-            -- Hide Name Tag for other players
-            local hl = char:FindFirstChild("InvisHighlight")
+            -- Hide Nametag for other players
+            local hl = c:FindFirstChild("InvisHighlight")
             if not hl then
                 hl = Instance.new("Highlight")
                 hl.Name = "InvisHighlight"
                 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 hl.FillTransparency = 1
                 hl.OutlineTransparency = 1
-                hl.Parent = char
+                hl.Parent = c
             end
         end
     end))
@@ -602,7 +602,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.6"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.8"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -682,7 +682,7 @@ local function createAction(parent, text, posY, color)
     return btn
 end
 
--- PAGE 1: MOVE (Size Editor Removed)
+-- PAGE 1: MOVE
 local flyBtn, flyBg, flyKnob = createToggle(pageMove, "Enable Fly", 0)
 local flySpeedLabel, flySpeedMinus, flySpeedPlus = createStepper(pageMove, "Fly Speed: 60", 60)
 local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 120)
