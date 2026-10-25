@@ -1,4 +1,4 @@
--- PocketGUI v25.0 (Void Drop Kill Added)
+-- PocketGUI v26.1 (SkidFling Kill All + Kill Player)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -23,6 +23,145 @@ local state = {
 local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
+
+local function notify(title, text)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {Title=title, Text=text, Duration=4})
+    end)
+end
+
+-- SKIDFLING (Integrated)
+local function skidFling(TargetPlayer)
+    if TargetPlayer == player then return end
+    local Character = player.Character
+    if not Character then return end
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    if not Humanoid or not RootPart then return end
+
+    local TCharacter = TargetPlayer.Character
+    if not TCharacter then return notify("Fling", "Target has no character") end
+    local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
+    if not THumanoid then return notify("Fling", "Target missing humanoid") end
+
+    local OldFPDH = workspace.FallenPartsDestroyHeight
+    local OldPos = RootPart.CFrame
+
+    workspace.CurrentCamera.CameraSubject = THead or (THumanoid and THumanoid) or Handle
+
+    local FPos = function(BasePart, Pos, Ang)
+        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+        Character:PivotTo(CFrame.new(BasePart.Position) * Pos * Ang)
+        RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local SFBasePart = function(BasePart)
+        local TimeToWait = 2
+        local Time = tick()
+        local Angle = 0
+        repeat
+            if RootPart and THumanoid and THumanoid.Parent then
+                if BasePart.Velocity.Magnitude < 50 then
+                    Angle = Angle + 100
+                    FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                else
+                    FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, -TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(-90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                end
+            else
+                break
+            end
+        until BasePart.Velocity.Magnitude > 500 or BasePart.Parent ~= TCharacter or TargetPlayer.Parent ~= Players or not TargetPlayer.Character or THumanoid.Sit or Humanoid.Health <= 0 or tick() > Time + TimeToWait
+    end
+
+    workspace.FallenPartsDestroyHeight = 0/0
+
+    local BV = Instance.new("BodyVelocity")
+    BV.Name = "EpixVel"
+    BV.Parent = RootPart
+    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+    BV.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart and THead then
+        if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+            SFBasePart(THead)
+        else
+            SFBasePart(TRootPart)
+        end
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    workspace.CurrentCamera.CameraSubject = Humanoid
+
+    repeat
+        RootPart.CFrame = OldPos * CFrame.new(0, 0.5, 0)
+        Character:PivotTo(OldPos * CFrame.new(0, 0.5, 0))
+        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        for _, x in ipairs(Character:GetChildren()) do
+            if x:IsA("BasePart") then
+                x.Velocity = Vector3.zero
+                x.RotVelocity = Vector3.zero
+            end
+        end
+        task.wait()
+    until (RootPart.Position - OldPos.Position).Magnitude < 25
+    workspace.FallenPartsDestroyHeight = OldFPDH
+end
+
+-- KILL ALL (Uses SkidFling)
+local function killAll()
+    local success = false
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            task.spawn(function() pcall(function() skidFling(plr) end) end)
+            success = true
+        end
+    end
+    return success
+end
 
 -- FLY
 local function setFly(on)
@@ -80,24 +219,6 @@ local function setFly(on)
     end)
 end
 
--- KILL FUNCTION (Void Drop)
-local function killPlayer(targetPlayer)
-    local targetChar = workspace:FindFirstChild(targetPlayer.Name)
-    if not targetChar then return false end
-    
-    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
-    if not targetRoot then return false end
-
-    -- Break joints so they can't recover
-    for _, v in ipairs(targetChar:GetDescendants()) do
-        if v:IsA("Motor6D") then v.Part0 = nil end
-    end
-    
-    -- Drop them under the map
-    targetRoot.CFrame = targetRoot.CFrame - Vector3.new(0, 500, 0)
-    return true
-end
-
 -- CLICK TELEPORT
 local function enableTapTP(onButton)
     if state.tpConn then state.tpConn:Disconnect() state.tpConn = nil end
@@ -146,8 +267,7 @@ local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
     if not on then 
-        local h = getHum()
-        if h then h.WalkSpeed = 16 end
+        local h = getHum(); if h then h.WalkSpeed = 16 end
         return 
     end
     state.speedConn=track(RunService.Heartbeat:Connect(function()
@@ -160,13 +280,11 @@ local function setHighJump(on)
     state.highJump = on
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
     if not on then 
-        local h = getHum()
-        if h then h.JumpPower = 50 end
+        local h = getHum(); if h then h.JumpPower = 50 end
         return 
     end
     state.jumpConn = track(RunService.Heartbeat:Connect(function()
-        local h = getHum()
-        if h then h.JumpPower = state.jumpPower end
+        local h = getHum(); if h then h.JumpPower = state.jumpPower end
     end))
 end
 
@@ -210,7 +328,7 @@ local function setPlayerEsp(on)
     end))
 end
 
--- MM2 FEATURES
+-- MM2 ROLE ESP
 local function getMM2Role(plr)
     local char = plr.Character; if not char then return nil end
     for _, tool in ipairs(char:GetChildren()) do
@@ -264,20 +382,6 @@ local function setMM2Esp(on)
             end
         end
     end))
-end
-
-local function mm2KillAll()
-    local char = player.Character; if not char then return false end
-    local hasKnife = false
-    for _, tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and tool.Name:lower():find("knife") then hasKnife = true break end end
-    if not hasKnife then return false end
-    local root = getRoot(); if not root then return false end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character then
-            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); if pr then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
-        end
-    end
-    return true
 end
 
 local function mm2GrabGun()
@@ -422,7 +526,7 @@ local tpBtn = createAction(pageVisuals, "Click Teleport", 0, Color3.fromRGB(80, 
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
 local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
 
--- PAGE 3: PLAYERS (with Kill button)
+-- PAGE 3: PLAYERS
 local playerListFrame = Instance.new("Frame")
 playerListFrame.Size = UDim2.new(1, -10, 1, 0); playerListFrame.BackgroundTransparency = 1; playerListFrame.Parent = pagePlayers
 local playerLayout = Instance.new("UIListLayout"); playerLayout.Padding = UDim.new(0, 6); playerLayout.Parent = playerListFrame
@@ -437,26 +541,24 @@ local function refreshPlayerList()
             row.Size = UDim2.new(1, 0, 0, 50); row.BackgroundColor3 = Color3.fromRGB(28, 28, 38); row.Parent = playerListFrame
             local rcr = Instance.new("UICorner"); rcr.CornerRadius = UDim.new(0,10); rcr.Parent = row
             local nameLbl = Instance.new("TextLabel")
-            nameLbl.Size = UDim2.new(1, -190, 1, 0); nameLbl.Position = UDim2.new(0, 15, 0, 0)
+            nameLbl.Size = UDim2.new(1, -170, 1, 0); nameLbl.Position = UDim2.new(0, 15, 0, 0)
             nameLbl.BackgroundTransparency = 1; nameLbl.Text = plr.Name; nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
-            nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 13; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
+            nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 14; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
 
-            local killBtn = Instance.new("TextButton")
-            killBtn.Size = UDim2.new(0, 60, 1, -14); killBtn.Position = UDim2.new(1, -160, 0, 7)
-            killBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 60); killBtn.Text = "Kill"
-            killBtn.TextColor3 = Color3.fromRGB(255,255,255); killBtn.Font = Enum.Font.GothamBold; killBtn.TextSize = 12; killBtn.Parent = row
-            local kcr = Instance.new("UICorner"); kcr.CornerRadius = UDim.new(0,8); kcr.Parent = killBtn
+            local killPlayerBtn = Instance.new("TextButton")
+            killPlayerBtn.Size = UDim2.new(0, 70, 1, -14); killPlayerBtn.Position = UDim2.new(1, -160, 0, 7)
+            killPlayerBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 80); killPlayerBtn.Text = "Kill"
+            killPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); killPlayerBtn.Font = Enum.Font.GothamBold; killPlayerBtn.TextSize = 13; killPlayerBtn.Parent = row
+            local kcr = Instance.new("UICorner"); kcr.CornerRadius = UDim.new(0,8); kcr.Parent = killPlayerBtn
 
             local tpPlayerBtn = Instance.new("TextButton")
-            tpPlayerBtn.Size = UDim2.new(0, 85, 1, -14); tpPlayerBtn.Position = UDim2.new(1, -100, 0, 7)
-            tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,120,200); tpPlayerBtn.Text = "Teleport"
-            tpPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); tpPlayerBtn.Font = Enum.Font.GothamBold; tpPlayerBtn.TextSize = 12; tpPlayerBtn.Parent = row
+            tpPlayerBtn.Size = UDim2.new(0, 70, 1, -14); tpPlayerBtn.Position = UDim2.new(1, -85, 0, 7)
+            tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,120,200); tpPlayerBtn.Text = "TP"
+            tpPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); tpPlayerBtn.Font = Enum.Font.GothamBold; tpPlayerBtn.TextSize = 13; tpPlayerBtn.Parent = row
             local tcr = Instance.new("UICorner"); tcr.CornerRadius = UDim.new(0,8); tcr.Parent = tpPlayerBtn
 
-            killBtn.MouseButton1Click:Connect(function() 
-                local success = killPlayer(plr)
-                killBtn.Text = success and "Sent!" or "Failed"
-                task.delay(1.5, function() killBtn.Text = "Kill" end)
+            killPlayerBtn.MouseButton1Click:Connect(function()
+                task.spawn(function() pcall(function() skidFling(plr) end) end)
             end)
             tpPlayerBtn.MouseButton1Click:Connect(function() tpToPlayer(plr) end)
         end
@@ -467,12 +569,25 @@ Players.PlayerAdded:Connect(refreshPlayerList)
 Players.PlayerRemoving:Connect(refreshPlayerList)
 
 -- PAGE 4: MM2
-local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 0)
-local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(120,30,40))
-local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
+local killAllBtn = createAction(pageMM2, "Kill All (SkidFling)", 0, Color3.fromRGB(200, 30, 50))
+local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 60)
+local mm2GunBtn = createAction(pageMM2, "Grab Gun", 120, Color3.fromRGB(40,80,120))
 
--- PAGE 5: HUSS VALLEY
-local hussMunkeBtn = createAction(pageHuss, "Load MunkeHub", 0, Color3.fromRGB(60, 160, 90))
+killAllBtn.MouseButton1Click:Connect(function()
+    killAllBtn.Text = "Flinging..."
+    local success = killAll()
+    if success then
+        killAllBtn.Text = "Killed All ✓"
+    else
+        killAllBtn.Text = "No Players!"
+    end
+    task.delay(1.5, function() killAllBtn.Text = "Kill All (SkidFling)" end)
+end)
+
+mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Text=s and "Teleported ✓" or "No Gun" task.delay(1.5,function() mm2GunBtn.Text="Grab Gun" end) end)
+
+-- PAGE 5: HUSS
+local hussMunkeBtn = createAction(pageHuss, "Load MunkeHub (Auto Melee/ESP)", 0, Color3.fromRGB(60, 160, 90))
 local hussDeltaBtn = createAction(pageHuss, "Load Delta Aim Assist", 60, Color3.fromRGB(60, 120, 200))
 
 hussMunkeBtn.MouseButton1Click:Connect(function()
@@ -529,9 +644,6 @@ highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump)
 
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
-
-mm2KillBtn.MouseButton1Click:Connect(function() local s=mm2KillAll() mm2KillBtn.Text=s and "Killed ✓" or "Need Knife!" task.delay(1.5,function() mm2KillBtn.Text="Kill All (Knife)" end) end)
-mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Text=s and "Teleported ✓" or "No Gun" task.delay(1.5,function() mm2GunBtn.Text="Grab Gun" end) end)
 
 speedMinus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed - 5, 16, 500)
@@ -590,4 +702,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v25.0 Loaded! Kill button added.")
+print("[PocketGUI] v26.1 Loaded! Kill All + Kill Player added.")
