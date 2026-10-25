@@ -1,4 +1,4 @@
--- PocketGUI v27.4 (Full Script)
+-- PocketGUI v27.5 (Invisibility Added)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -14,9 +14,9 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, charSize=1.0,
+    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, charSize=1.0, invisible=false,
     flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil, sizeConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil, sizeConn=nil, invisConn=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
@@ -46,8 +46,6 @@ local function setFly(on)
     end
 
     hum.PlatformStand = true
-    
-    -- Force health to stay at 100 to prevent anti-cheat/fall damage deaths
     hum.MaxHealth = 100
     hum.Health = 100
     
@@ -114,7 +112,7 @@ local function enableTapTP(onButton)
     end))
 end
 
--- CHARACTER SIZE EDITOR (Fixed)
+-- CHARACTER SIZE EDITOR
 local function applySize(size)
     state.charSize = size
     local char = player.Character
@@ -149,6 +147,39 @@ player.CharacterAdded:Connect(function()
     task.wait(0.2)
     applySize(state.charSize)
 end)
+
+-- INVISIBILITY (NEW)
+local function setInvisible(on)
+    state.invisible = on
+    if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
+    
+    if not on then
+        local char = player.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.LocalTransparencyModifier = 0
+                    p.Transparency = 0
+                end
+            end
+        end
+        return
+    end
+
+    state.invisConn = track(RunService.Stepped:Connect(function()
+        local char = player.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.LocalTransparencyModifier = 1
+                    p.Transparency = 1
+                elseif p:IsA("Decal") or p:IsA("Texture") then
+                    p.Transparency = 1
+                end
+            end
+        end
+    end))
+end
 
 -- NOCLIP
 local function setNoclip(on)
@@ -593,7 +624,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.4"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.5"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -690,6 +721,7 @@ local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 0)
 local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 60)
 local skeletonBtn, skeletonBg, skeletonKnob = createToggle(pageVisuals, "Skeleton ESP", 120)
 local selfChamsBtn, selfChamsBg, selfChamsKnob = createToggle(pageVisuals, "Self Chams", 180)
+local invisBtn, invisBg, invisKnob = createToggle(pageVisuals, "Invisibility", 240)
 
 -- PAGE 3: PLAYERS
 local playerListFrame = Instance.new("Frame")
@@ -784,6 +816,7 @@ espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) an
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
 skeletonBtn.MouseButton1Click:Connect(function() setSkeletonEsp(not state.skeletonEsp) animateToggle(skeletonBg, skeletonKnob, state.skeletonEsp) end)
 selfChamsBtn.MouseButton1Click:Connect(function() setSelfChams(not state.selfChams) animateToggle(selfChamsBg, selfChamsKnob, state.selfChams) end)
+invisBtn.MouseButton1Click:Connect(function() setInvisible(not state.invisible) animateToggle(invisBg, invisKnob, state.invisible) end)
 mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
