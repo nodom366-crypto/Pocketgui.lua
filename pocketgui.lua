@@ -1,4 +1,4 @@
--- PocketGUI v27.5 (Invisibility Added)
+-- PocketGUI v27.6 (Server Invis & Size Editor Removed)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -14,9 +14,9 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, charSize=1.0, invisible=false,
+    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, invisible=false,
     flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil, sizeConn=nil, invisConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
@@ -48,7 +48,7 @@ local function setFly(on)
     hum.PlatformStand = true
     hum.MaxHealth = 100
     hum.Health = 100
-    
+
     state.healthConn = track(hum.HealthChanged:Connect(function(newHealth)
         if state.flying and newHealth < 100 then
             hum.Health = 100
@@ -112,62 +112,29 @@ local function enableTapTP(onButton)
     end))
 end
 
--- CHARACTER SIZE EDITOR
-local function applySize(size)
-    state.charSize = size
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    if hum.RigType == Enum.HumanoidRigType.R15 then
-        hum.BodyHeightScale = size
-        hum.BodyWidthScale  = size
-        hum.BodyDepthScale  = size
-        hum.HeadScale       = size
-    else
-        local scaleMap = {
-            ["Head"]      = Vector3.new(2, 1, 1),
-            ["Torso"]     = Vector3.new(2, 2, 1),
-            ["Left Arm"]  = Vector3.new(1, 2, 1),
-            ["Right Arm"] = Vector3.new(1, 2, 1),
-            ["Left Leg"]  = Vector3.new(1, 2, 1),
-            ["Right Leg"] = Vector3.new(1, 2, 1),
-        }
-        for name, base in pairs(scaleMap) do
-            local part = char:FindFirstChild(name)
-            if part and part:IsA("BasePart") then
-                part.Size = base * size
-            end
-        end
-    end
-end
-
-player.CharacterAdded:Connect(function()
-    task.wait(0.2)
-    applySize(state.charSize)
-end)
-
--- INVISIBILITY (NEW)
+-- INVISIBILITY (Server-Side Replication Fix)
 local function setInvisible(on)
     state.invisible = on
     if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
+    local char = player.Character
     
     if not on then
-        local char = player.Character
         if char then
             for _, p in ipairs(char:GetDescendants()) do
                 if p:IsA("BasePart") then
                     p.LocalTransparencyModifier = 0
                     p.Transparency = 0
+                elseif p:IsA("Decal") or p:IsA("Texture") then
+                    p.Transparency = 0
                 end
             end
+            local hl = char:FindFirstChild("InvisHighlight")
+            if hl then hl:Destroy() end
         end
         return
     end
 
     state.invisConn = track(RunService.Stepped:Connect(function()
-        local char = player.Character
         if char then
             for _, p in ipairs(char:GetDescendants()) do
                 if p:IsA("BasePart") then
@@ -176,6 +143,17 @@ local function setInvisible(on)
                 elseif p:IsA("Decal") or p:IsA("Texture") then
                     p.Transparency = 1
                 end
+            end
+            
+            -- Hide Name Tag for other players
+            local hl = char:FindFirstChild("InvisHighlight")
+            if not hl then
+                hl = Instance.new("Highlight")
+                hl.Name = "InvisHighlight"
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillTransparency = 1
+                hl.OutlineTransparency = 1
+                hl.Parent = char
             end
         end
     end))
@@ -624,7 +602,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.5"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v27.6"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
@@ -704,7 +682,7 @@ local function createAction(parent, text, posY, color)
     return btn
 end
 
--- PAGE 1: MOVE
+-- PAGE 1: MOVE (Size Editor Removed)
 local flyBtn, flyBg, flyKnob = createToggle(pageMove, "Enable Fly", 0)
 local flySpeedLabel, flySpeedMinus, flySpeedPlus = createStepper(pageMove, "Fly Speed: 60", 60)
 local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 120)
@@ -712,9 +690,8 @@ local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16
 local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
 local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
 local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
-local sizeLabel, sizeMinus, sizePlus = createStepper(pageMove, "Size: 1.0", 420)
-local tpBtn = createAction(pageMove, "Click Teleport", 480, Color3.fromRGB(80, 60, 180))
-local resetBtn = createAction(pageMove, "Respawn (Reset)", 535, Color3.fromRGB(220, 60, 80))
+local tpBtn = createAction(pageMove, "Click Teleport", 420, Color3.fromRGB(80, 60, 180))
+local resetBtn = createAction(pageMove, "Respawn (Reset)", 475, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 0)
@@ -851,17 +828,6 @@ end)
 flySpeedPlus.MouseButton1Click:Connect(function()
     state.flySpeed = math.clamp(state.flySpeed + 50, 10, 1000)
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
-end)
-
-sizeMinus.MouseButton1Click:Connect(function()
-    state.charSize = math.clamp(state.charSize - 0.1, 0.5, 3.0)
-    sizeLabel.Text = string.format("Size: %.1f", state.charSize)
-    applySize(state.charSize)
-end)
-sizePlus.MouseButton1Click:Connect(function()
-    state.charSize = math.clamp(state.charSize + 0.1, 0.5, 3.0)
-    sizeLabel.Text = string.format("Size: %.1f", state.charSize)
-    applySize(state.charSize)
 end)
 
 -- FLOATING BUTTON
