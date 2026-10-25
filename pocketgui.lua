@@ -1,9 +1,8 @@
--- PocketGUI v29.4 (0.5 Ghost Invisibility)
+-- PocketGUI v25.1 (Fixed Steppers + Egg Tab)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -14,28 +13,27 @@ if pg:FindFirstChild("PocketGUI_Float") then pg.PocketGUI_Float:Destroy() end
 local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
-    flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, invisible=false,
-    flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil,
-    playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
-    selfChamsConn=nil, selfChamsHighlight=nil,
-    mm2EspConn=nil, mm2Highlights={}, connections={},
-    ndsGodmode=false, ndsAutoWin=false, infJump=false,
-    hussAutoDodge=false, hussAutoTackle=false, hussEsp=false, hussHighlights={}
+    flySpeed=60, tpMode=false,
+    eggSteal=false, eggEsp=false, basePos=nil,
+    flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil,
+    playerEspConn=nil, playerHighlights={}, 
+    mm2EspConn=nil, mm2Highlights={}, eggEspConn=nil, eggHighlights={}, 
+    connections={}
 }
 
 local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY
+-- FLY (Joystick + Camera)
 local function setFly(on)
     state.flying = on
+    local char = player.Character
     local root = getRoot()
     local hum = getHum()
 
     if state.flyConn then state.flyConn:Disconnect() state.flyConn = nil end
-    if state.healthConn then state.healthConn:Disconnect() state.healthConn = nil end
     if state.bodyVelocity then state.bodyVelocity:Destroy() state.bodyVelocity = nil end
     if state.bodyGyro then state.bodyGyro:Destroy() state.bodyGyro = nil end
 
@@ -45,12 +43,8 @@ local function setFly(on)
     end
 
     hum.PlatformStand = true
-    hum.MaxHealth = 100
-    hum.Health = 100
-
-    state.healthConn = track(hum.HealthChanged:Connect(function(newHealth)
-        if state.flying and newHealth < 100 then hum.Health = 100 end
-    end))
+    hum.MaxHealth = math.huge
+    hum.Health = math.huge
 
     state.bodyVelocity = Instance.new("BodyVelocity")
     state.bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
@@ -66,7 +60,10 @@ local function setFly(on)
     state.flyConn = track(RunService.RenderStepped:Connect(function()
         if not state.flying or not root or not root.Parent then return end
         local move = hum.MoveDirection
-        local direction = Vector3.new(move.X, 0, move.Z) + Vector3.new(0, camera.CFrame.LookVector.Y * move.Magnitude, 0)
+        local look = camera.CFrame.LookVector
+        local horizontal = Vector3.new(move.X, 0, move.Z)
+        local vertical = look.Y * move.Magnitude
+        local direction = horizontal + Vector3.new(0, vertical, 0)
         if direction.Magnitude > 0 then
             state.bodyVelocity.Velocity = direction.Unit * state.flySpeed
         else
@@ -77,8 +74,94 @@ local function setFly(on)
 
     task.spawn(function()
         while state.flying do task.wait(0.5) end
-        if hum and hum.Parent then hum.PlatformStand = false end
+        if hum then
+            hum.MaxHealth = 100
+            hum.Health = 100
+            hum.PlatformStand = false
+        end
     end)
+end
+
+-- EGG STEAL LOOP
+local function startEggSteal()
+    state.eggSteal = true
+    local basePos = state.basePos
+    if not basePos then
+        print("[PocketGUI] Save Base Position first!")
+        return
+    end
+
+    task.spawn(function()
+        while state.eggSteal do
+            local root = getRoot()
+            local char = player.Character
+            if not root or not char then task.wait(1) continue end
+
+            local nearestEgg = nil
+            local shortestDist = math.huge
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and obj.Name:lower():find("egg") then
+                    local dist = (obj.Position - root.Position).Magnitude
+                    if dist < shortestDist then
+                        nearestEgg = obj
+                        shortestDist = dist
+                    end
+                end
+            end
+
+            if nearestEgg then
+                root.CFrame = CFrame.new(nearestEgg.Position + Vector3.new(0, 3, 0))
+                task.wait(0.5)
+                local prompt = nearestEgg:FindFirstChildOfClass("ProximityPrompt")
+                if prompt then fireproximityprompt(prompt) else
+                    local click = nearestEgg:FindFirstChildOfClass("ClickDetector")
+                    if click then fireclickdetector(click) end
+                end
+                task.wait(0.5)
+                root.CFrame = CFrame.new(0, 100, 0)
+                task.wait(0.1)
+                root.CFrame = CFrame.new(0, 5, 0)
+                task.wait(2)
+                local prompt2 = nearestEgg:FindFirstChildOfClass("ProximityPrompt")
+                if prompt2 then fireproximityprompt(prompt2) else
+                    local click2 = nearestEgg:FindFirstChildOfClass("ClickDetector")
+                    if click2 then fireclickdetector(click2) end
+                end
+                task.wait(0.5)
+                root.CFrame = basePos + Vector3.new(0, 3, 0)
+                task.wait(1)
+            else
+                task.wait(1)
+            end
+        end
+    end)
+end
+
+local function stopEggSteal()
+    state.eggSteal = false
+end
+
+-- EGG ESP
+local function setEggEsp(on)
+    state.eggEsp = on
+    if state.eggEspConn then state.eggEspConn:Disconnect() state.eggEspConn = nil end
+    for _, h in pairs(state.eggHighlights) do if h and h.Parent then h:Destroy() end end
+    state.eggHighlights = {}
+    if not on then return end
+    state.eggEspConn = track(RunService.Heartbeat:Connect(function()
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Name:lower():find("egg") then
+                if not state.eggHighlights[obj] then
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(255, 255, 0)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 100)
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.Parent = obj
+                    state.eggHighlights[obj] = hl
+                end
+            end
+        end
+    end))
 end
 
 -- CLICK TELEPORT
@@ -91,7 +174,7 @@ local function enableTapTP(onButton)
         if not state.tpMode then return end
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             local guiObj = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) or obj:IsDescendantOf(pg.PocketGUI_Float) then return end end
+            for _, obj in ipairs(guiObj) do if obj:IsDescendantOf(pg.PocketGUI) then return end end
             local ray = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
             local params = RaycastParams.new()
             params.FilterType = Enum.RaycastFilterType.Exclude
@@ -100,54 +183,6 @@ local function enableTapTP(onButton)
             if result then local root = getRoot(); if root then root.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0)) end end
             state.tpMode = false; onButton.Text = "Click Teleport"
             if state.tpConn then state.tpConn:Disconnect() state.tpConn = nil end
-        end
-    end))
-end
-
--- INVISIBILITY (0.5 Ghost Mode)
-local function setInvisible(on)
-    state.invisible = on
-    if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
-    
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-
-    if not on then
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.Transparency = 0
-                p.LocalTransparencyModifier = 0
-            end
-        end
-        if hum then 
-            hum.DisplayName = player.DisplayName
-            hum.NameDisplayDistance = 100
-        end
-        return
-    end
-
-    for _, p in ipairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then
-            p.Transparency = 0.5
-        elseif p:IsA("Decal") or p:IsA("Texture") then
-            p.Transparency = 0.5
-        end
-    end
-
-    if hum then 
-        hum.DisplayName = " " 
-        hum.NameDisplayDistance = 0
-    end
-
-    state.invisConn = track(RunService.Stepped:Connect(function()
-        local c = player.Character
-        if c then
-            for _, p in ipairs(c:GetDescendants()) do
-                if p:IsA("BasePart") and p.Transparency ~= 0.5 then
-                    p.Transparency = 0.5
-                end
-            end
         end
     end))
 end
@@ -172,32 +207,34 @@ local function setNoclip(on)
     end
 end
 
--- SPEED BOOST
+-- SPEED BOOST (Fixed: Instant apply)
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
+    local h = getHum()
     if not on then 
-        local h = getHum()
         if h then h.WalkSpeed = 16 end
         return 
     end
+    if h then h.WalkSpeed = state.walkSpeed end
     state.speedConn=track(RunService.Heartbeat:Connect(function()
-        local h=getHum(); if h then h.WalkSpeed=state.walkSpeed end
+        local hh=getHum(); if hh then hh.WalkSpeed=state.walkSpeed end
     end))
 end
 
--- HIGH JUMP
+-- HIGH JUMP (Fixed: Instant apply)
 local function setHighJump(on)
     state.highJump = on
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
+    local h = getHum()
     if not on then 
-        local h = getHum()
         if h then h.JumpPower = 50 end
         return 
     end
+    if h then h.JumpPower = state.jumpPower end
     state.jumpConn = track(RunService.Heartbeat:Connect(function()
-        local h = getHum()
-        if h then h.JumpPower = state.jumpPower end
+        local hh = getHum()
+        if hh then hh.JumpPower = state.jumpPower end
     end))
 end
 
@@ -215,75 +252,6 @@ local function setXRay(on)
         for obj, orig in pairs(xrayOriginals) do if obj and obj.Parent then obj.Transparency = orig end end
         xrayOriginals = {}
     end
-end
-
--- SKELETON ESP
-local function setSkeletonEsp(on)
-    state.skeletonEsp = on
-    if state.skeletonConn then state.skeletonConn:Disconnect() state.skeletonConn = nil end
-    for _, d in pairs(state.skeletonDrawings) do if d and d.Parent then d:Destroy() end end
-    state.skeletonDrawings = {}
-    if not on then return end
-    state.skeletonConn = track(RunService.Heartbeat:Connect(function()
-        for _, d in pairs(state.skeletonDrawings) do if d and d.Parent then d:Destroy() end end
-        state.skeletonDrawings = {}
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player and plr.Character then
-                local char = plr.Character
-                local root = char:FindFirstChild("HumanoidRootPart")
-                local head = char:FindFirstChild("Head")
-                local leftArm = char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm")
-                local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm")
-                local leftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg")
-                local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
-
-                local function drawLine(p1, p2, color)
-                    if p1 and p2 then
-                        local dist = (p1.Position - p2.Position).Magnitude
-                        local part = Instance.new("Part")
-                        part.Size = Vector3.new(0.1, 0.1, dist)
-                        part.CFrame = CFrame.new(p1.Position, p2.Position) * CFrame.new(0, 0, -dist/2)
-                        part.Anchored = true
-                        part.CanCollide = false
-                        part.Material = Enum.Material.Neon
-                        part.Color = color
-                        part.Parent = workspace
-                        table.insert(state.skeletonDrawings, part)
-                    end
-                end
-
-                drawLine(head, root, Color3.fromRGB(255, 0, 0))
-                drawLine(root, leftArm, Color3.fromRGB(0, 255, 0))
-                drawLine(root, rightArm, Color3.fromRGB(0, 255, 0))
-                drawLine(root, leftLeg, Color3.fromRGB(0, 0, 255))
-                drawLine(root, rightLeg, Color3.fromRGB(0, 0, 255))
-            end
-        end
-    end))
-end
-
--- SELF CHAMS
-local function setSelfChams(on)
-    state.selfChams = on
-    if state.selfChamsConn then state.selfChamsConn:Disconnect() state.selfChamsConn = nil end
-    if state.selfChamsHighlight then state.selfChamsHighlight:Destroy() state.selfChamsHighlight = nil end
-    if not on then return end
-    state.selfChamsConn = track(RunService.Heartbeat:Connect(function()
-        local char = player.Character
-        if char then
-            if not state.selfChamsHighlight or state.selfChamsHighlight.Parent ~= char then
-                if state.selfChamsHighlight then state.selfChamsHighlight:Destroy() end
-                state.selfChamsHighlight = Instance.new("Highlight")
-                state.selfChamsHighlight.FillColor = Color3.fromRGB(0, 255, 255)
-                state.selfChamsHighlight.OutlineColor = Color3.fromRGB(0, 255, 255)
-                state.selfChamsHighlight.FillTransparency = 0.5
-                state.selfChamsHighlight.OutlineTransparency = 0
-                state.selfChamsHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                state.selfChamsHighlight.Parent = char
-            end
-        end
-    end))
 end
 
 -- PLAYER ESP
@@ -369,19 +337,12 @@ end
 local function mm2KillAll()
     local char = player.Character; if not char then return false end
     local hasKnife = false
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") and tool.Name:lower():find("knife") then
-            hasKnife = true
-            break
-        end
-    end
+    for _, tool in ipairs(char:GetChildren()) do if tool:IsA("Tool") and tool.Name:lower():find("knife") then hasKnife = true break end end
     if not hasKnife then return false end
     local root = getRoot(); if not root then return false end
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            local pr = plr.Character:FindFirstChild("HumanoidRootPart")
-            if pr and hum and hum.Health > 0 then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
+            local pr = plr.Character:FindFirstChild("HumanoidRootPart"); if pr then pr.CFrame = root.CFrame * CFrame.new(0, 0, -2) end
         end
     end
     return true
@@ -425,161 +386,6 @@ local function tpToPlayer(plr)
     if myRoot and tRoot then myRoot.CFrame = tRoot.CFrame + Vector3.new(0, 3, 0) end
 end
 
--- DISASTER LOGIC
-local function setNDSGodmode(on)
-    state.ndsGodmode = on
-    if state.ndsGodConn then state.ndsGodConn:Disconnect() state.ndsGodConn = nil end
-    if not on then return end
-    state.ndsGodConn = track(RunService.Heartbeat:Connect(function()
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if hum and root then
-                hum.MaxHealth = math.huge
-                hum.Health = math.huge
-                if hum:GetState() == Enum.HumanoidStateType.Dead or hum:GetState() == Enum.HumanoidStateType.Physics then
-                    hum:ChangeState(Enum.HumanoidStateType.Running)
-                end
-                local bodyForce = root:FindFirstChild("NDS_AntiFling")
-                if not bodyForce then
-                    bodyForce = Instance.new("BodyForce")
-                    bodyForce.Name = "NDS_AntiFling"
-                    bodyForce.Force = Vector3.new(0, workspace.Gravity * root:GetMass(), 0)
-                    bodyForce.Parent = root
-                end
-            end
-        end
-    end))
-end
-
-local function setNDSAutoWin(on)
-    state.ndsAutoWin = on
-    if state.ndsWinConn then state.ndsWinConn:Disconnect() state.ndsWinConn = nil end
-    if not on then return end
-    state.ndsWinConn = track(RunService.Heartbeat:Connect(function()
-        local root = getRoot()
-        if not root then return end
-        local map = workspace:FindFirstChild("Map")
-        if map then
-            local winPad = map:FindFirstChild("WinPad")
-            if winPad then
-                root.CFrame = CFrame.new(winPad.Position + Vector3.new(0, 5, 0))
-            end
-        end
-    end))
-end
-
--- UTILITY LOGIC
-local function setInfJump(on)
-    state.infJump = on
-    if state.infJumpConn then state.infJumpConn:Disconnect() state.infJumpConn = nil end
-    if not on then return end
-    state.infJumpConn = track(UIS.JumpRequest:Connect(function()
-        if state.infJump then
-            local hum = getHum()
-            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end
-    end))
-end
-
--- HUSS VALLEY LOGIC
-local function getHussRole(plr)
-    local role = plr:GetAttribute("GameRole")
-    if typeof(role) == "string" then return role end
-    return "Lobby"
-end
-
-local function setHussAutoDodge(on)
-    state.hussAutoDodge = on
-    if state.hussDodgeConn then state.hussDodgeConn:Disconnect() state.hussDodgeConn = nil end
-    if not on then return end
-    state.hussDodgeConn = track(RunService.Heartbeat:Connect(function()
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-        if not myRoot or not myHum or myHum.Health <= 0 then return end
-        if getHussRole(player) ~= "Runner" then return end
-        local closestDist = math.huge
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player and getHussRole(plr) == "Chaser" then
-                local chaserChar = plr.Character
-                local chaserRoot = chaserChar and chaserChar:FindFirstChild("HumanoidRootPart")
-                if chaserRoot then
-                    local dist = (myRoot.Position - chaserRoot.Position).Magnitude
-                    if dist < closestDist then closestDist = dist end
-                end
-            end
-        end
-        if closestDist < 12 then
-            local vu = game:GetService("VirtualUser")
-            vu:CaptureController()
-            myHum:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end))
-end
-
-local function setHussAutoTackle(on)
-    state.hussAutoTackle = on
-    if state.hussTackleConn then state.hussTackleConn:Disconnect() state.hussTackleConn = nil end
-    if not on then return end
-    state.hussTackleConn = track(RunService.Heartbeat:Connect(function()
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-        if not myRoot or not myHum or myHum.Health <= 0 then return end
-        if getHussRole(player) ~= "Chaser" then return end
-        local closestRunner = nil
-        local closestDist = math.huge
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player and getHussRole(plr) == "Runner" then
-                local runChar = plr.Character
-                local runRoot = runChar and runChar:FindFirstChild("HumanoidRootPart")
-                if runRoot then
-                    local dist = (myRoot.Position - runRoot.Position).Magnitude
-                    if dist < closestDist then closestDist = dist; closestRunner = runRoot end
-                end
-            end
-        end
-        if closestRunner and closestDist < 10 then
-            myRoot.CFrame = closestRunner.CFrame * CFrame.new(0, 0, 2)
-            local vu = game:GetService("VirtualUser")
-            vu:CaptureController()
-            vu:ClickButton1(Vector2.new())
-        end
-    end))
-end
-
-local function setHussEsp(on)
-    state.hussEsp = on
-    if state.hussEspConn then state.hussEspConn:Disconnect() state.hussEspConn = nil end
-    for _, h in pairs(state.hussHighlights) do if h and h.Parent then h:Destroy() end end
-    state.hussHighlights = {}
-    if not on then return end
-    state.hussEspConn = track(RunService.Heartbeat:Connect(function()
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player and plr.Character then
-                local role = getHussRole(plr)
-                local hl = state.hussHighlights[plr.UserId]
-                if not hl or not hl.Parent then
-                    hl = Instance.new("Highlight")
-                    hl.FillTransparency = 0.5; hl.OutlineTransparency = 0
-                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    hl.Parent = plr.Character
-                    state.hussHighlights[plr.UserId] = hl
-                end
-                if role == "Chaser" then
-                    hl.FillColor = Color3.fromRGB(255, 30, 30); hl.OutlineColor = Color3.fromRGB(255, 100, 100)
-                elseif role == "Runner" then
-                    hl.FillColor = Color3.fromRGB(40, 220, 80); hl.OutlineColor = Color3.fromRGB(100, 255, 140)
-                else
-                    hl.FillColor = Color3.fromRGB(100, 100, 100); hl.OutlineColor = Color3.fromRGB(150, 150, 150)
-                end
-            end
-        end
-    end))
-end
-
 -- ==========================================
 -- PREMIUM UI BUILD
 -- ==========================================
@@ -595,31 +401,26 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v29.4"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
 titleGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 100, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 200, 255))}
 titleGrad.Parent = title
 
-local tabScroll = Instance.new("ScrollingFrame")
-tabScroll.Size = UDim2.new(1, -40, 0, 40); tabScroll.Position = UDim2.new(0, 20, 0, 55)
-tabScroll.BackgroundTransparency = 1; tabScroll.BorderSizePixel = 0; tabScroll.ScrollBarThickness = 0
-tabScroll.CanvasSize = UDim2.new(0,0,0,0); tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
-tabScroll.ScrollingDirection = Enum.ScrollingDirection.X; tabScroll.Parent = main
-
-local tabLayout = Instance.new("UIListLayout"); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.Padding = UDim.new(0, 8); tabLayout.Parent = tabScroll
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -40, 0, 40); tabBar.Position = UDim2.new(0, 20, 0, 55); tabBar.BackgroundTransparency = 1; tabBar.Parent = main
+local tabLayout = Instance.new("UIListLayout"); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.Padding = UDim.new(0, 6); tabLayout.Parent = tabBar
 
 local function createTab(text)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 85, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(30, 30, 42); btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(150, 150, 170); btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.BorderSizePixel = 0; btn.Parent = tabScroll
+    btn.Size = UDim2.new(0, 75, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(30, 30, 42); btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(150, 150, 170); btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.BorderSizePixel = 0; btn.Parent = tabBar
     local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0, 10); cr.Parent = btn
     return btn
 end
 
-local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2")
-local tabDisaster = createTab("DISASTER"); local tabUtility = createTab("UTILITY"); local tabHuss = createTab("HUSS")
+local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2"); local tabHuss = createTab("HUSS"); local tabEgg = createTab("EGG")
 
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -40, 1, -170); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
@@ -631,8 +432,7 @@ local function createPage()
     return p
 end
 
-local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage()
-local pageDisaster=createPage() local pageUtility=createPage() local pageHuss=createPage()
+local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage() local pageHuss=createPage() local pageEgg=createPage()
 
 local function createToggle(parent, text, posY)
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, -10, 0, 50); f.Position = UDim2.new(0, 0, 0, posY)
@@ -681,17 +481,15 @@ local flySpeedLabel, flySpeedMinus, flySpeedPlus = createStepper(pageMove, "Fly 
 local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 120)
 local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16", 180)
 local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
-local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
-local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
-local tpBtn = createAction(pageMove, "Click Teleport", 420, Color3.fromRGB(80, 60, 180))
-local resetBtn = createAction(pageMove, "Respawn (Reset)", 475, Color3.fromRGB(220, 60, 80))
+local jpLabel, jpMinus, jpPlus = createStepper(pageMove, "JumpPower: 50", 300)
+local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "Apply Jump", 360)
+local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 420)
+local resetBtn = createAction(pageMove, "Respawn (Reset)", 480, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
-local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 0)
-local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 60)
-local skeletonBtn, skeletonBg, skeletonKnob = createToggle(pageVisuals, "Skeleton ESP", 120)
-local selfChamsBtn, selfChamsBg, selfChamsKnob = createToggle(pageVisuals, "Self Chams", 180)
-local invisBtn, invisBg, invisKnob = createToggle(pageVisuals, "Invisibility", 240)
+local tpBtn = createAction(pageVisuals, "Click Teleport", 0, Color3.fromRGB(80, 60, 180))
+local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
+local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
 
 -- PAGE 3: PLAYERS
 local playerListFrame = Instance.new("Frame")
@@ -731,17 +529,30 @@ local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 0)
 local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(120,30,40))
 local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
 
--- PAGE 5: DISASTER
-local godBtn, godBg, godKnob = createToggle(pageDisaster, "Godmode (Survive All)", 0)
-local winBtn, winBg, winKnob = createToggle(pageDisaster, "Auto-Win (TP to Tower)", 60)
+-- PAGE 5: HUSS VALLEY
+local hussMunkeBtn = createAction(pageHuss, "Load MunkeHub (Auto Melee/ESP)", 0, Color3.fromRGB(60, 160, 90))
+local hussDeltaBtn = createAction(pageHuss, "Load Delta Aim Assist", 60, Color3.fromRGB(60, 120, 200))
 
--- PAGE 6: UTILITY
-local infJumpBtn, infJumpBg, infJumpKnob = createToggle(pageUtility, "Infinite Jump", 0)
+hussMunkeBtn.MouseButton1Click:Connect(function()
+    pcall(function() loadstring(game:HttpGet('https://pastefy.app/uHZruyoj/raw'))() end)
+end)
+hussDeltaBtn.MouseButton1Click:Connect(function()
+    pcall(function() loadstring(game:HttpGet("https://pastefy.app/3pRyePB8/raw"))() end)
+end)
 
--- PAGE 7: HUSS VALLEY
-local hussDodgeBtn, hussDodgeBg, hussDodgeKnob = createToggle(pageHuss, "God Runner (Auto Dodge)", 0)
-local hussTackleBtn, hussTackleBg, hussTackleKnob = createToggle(pageHuss, "God Chaser (Auto Tackle)", 60)
-local hussEspBtn, hussEspBg, hussEspKnob = createToggle(pageHuss, "Role ESP (See Everyone)", 120)
+-- PAGE 6: EGG
+local eggStealBtn, eggStealBg, eggStealKnob = createToggle(pageEgg, "Auto Steal Loop", 0)
+local saveBaseBtn = createAction(pageEgg, "Save Base Position", 60, Color3.fromRGB(60, 120, 200))
+local eggEspBtn, eggEspBg, eggEspKnob = createToggle(pageEgg, "Egg ESP", 120)
+
+saveBaseBtn.MouseButton1Click:Connect(function()
+    local root = getRoot()
+    if root then
+        state.basePos = root.CFrame.Position
+        saveBaseBtn.Text = "Base Saved!"
+        task.delay(1.5, function() saveBaseBtn.Text = "Save Base Position" end)
+    end
+end)
 
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
@@ -750,8 +561,8 @@ closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 14; closeBtn.BorderSi
 local cbCr = Instance.new("UICorner"); cbCr.CornerRadius = UDim.new(0,10); cbCr.Parent = closeBtn
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
-local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabDisaster, tabUtility, tabHuss}
-local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageDisaster, pageUtility, pageHuss}
+local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabHuss, tabEgg}
+local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageHuss, pageEgg}
 
 local function selectTab(index)
     for i = 1, #allTabs do
@@ -784,20 +595,15 @@ noclipBtn.MouseButton1Click:Connect(function() setNoclip(not state.noclip) anima
 speedBtn.MouseButton1Click:Connect(function() setSpeedBoost(not state.speedBoost) animateToggle(speedBg, speedKnob, state.speedBoost) end)
 espBtn.MouseButton1Click:Connect(function() setPlayerEsp(not state.playerEsp) animateToggle(espBg, espKnob, state.playerEsp) end)
 xrayBtn.MouseButton1Click:Connect(function() setXRay(not state.xray) animateToggle(xrayBg, xrayKnob, state.xray) end)
-skeletonBtn.MouseButton1Click:Connect(function() setSkeletonEsp(not state.skeletonEsp) animateToggle(skeletonBg, skeletonKnob, state.skeletonEsp) end)
-selfChamsBtn.MouseButton1Click:Connect(function() setSelfChams(not state.selfChams) animateToggle(selfChamsBg, selfChamsKnob, state.selfChams) end)
-invisBtn.MouseButton1Click:Connect(function() setInvisible(not state.invisible) animateToggle(invisBg, invisKnob, state.invisible) end)
 mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) animateToggle(mm2EspBg, mm2EspKnob, state.mm2Esp) end)
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
 
-godBtn.MouseButton1Click:Connect(function() setNDSGodmode(not state.ndsGodmode) animateToggle(godBg, godKnob, state.ndsGodmode) end)
-winBtn.MouseButton1Click:Connect(function() setNDSAutoWin(not state.ndsAutoWin) animateToggle(winBg, winKnob, state.ndsAutoWin) end)
-infJumpBtn.MouseButton1Click:Connect(function() setInfJump(not state.infJump) animateToggle(infJumpBg, infJumpKnob, state.infJump) end)
-
-hussDodgeBtn.MouseButton1Click:Connect(function() setHussAutoDodge(not state.hussAutoDodge) animateToggle(hussDodgeBg, hussDodgeKnob, state.hussAutoDodge) end)
-hussTackleBtn.MouseButton1Click:Connect(function() setHussAutoTackle(not state.hussAutoTackle) animateToggle(hussTackleBg, hussTackleKnob, state.hussAutoTackle) end)
-hussEspBtn.MouseButton1Click:Connect(function() setHussEsp(not state.hussEsp) animateToggle(hussEspBg, hussEspKnob, state.hussEsp) end)
+eggStealBtn.MouseButton1Click:Connect(function()
+    if state.eggSteal then stopEggSteal() else startEggSteal() end
+    animateToggle(eggStealBg, eggStealKnob, state.eggSteal)
+end)
+eggEspBtn.MouseButton1Click:Connect(function() setEggEsp(not state.eggEsp) animateToggle(eggEspBg, eggEspKnob, state.eggEsp) end)
 
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
@@ -808,10 +614,23 @@ mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Te
 speedMinus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed - 5, 16, 500)
     speedLabel.Text = "WalkSpeed: " .. state.walkSpeed
+    local h = getHum(); if h and state.speedBoost then h.WalkSpeed = state.walkSpeed end
 end)
 speedPlus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed + 5, 16, 500)
     speedLabel.Text = "WalkSpeed: " .. state.walkSpeed
+    local h = getHum(); if h and state.speedBoost then h.WalkSpeed = state.walkSpeed end
+end)
+
+jpMinus.MouseButton1Click:Connect(function()
+    state.jumpPower = math.clamp(state.jumpPower - 5, 0, 500)
+    jpLabel.Text = "JumpPower: " .. state.jumpPower
+    local h = getHum(); if h and state.highJump then h.JumpPower = state.jumpPower end
+end)
+jpPlus.MouseButton1Click:Connect(function()
+    state.jumpPower = math.clamp(state.jumpPower + 5, 0, 500)
+    jpLabel.Text = "JumpPower: " .. state.jumpPower
+    local h = getHum(); if h and state.highJump then h.JumpPower = state.jumpPower end
 end)
 
 flySpeedMinus.MouseButton1Click:Connect(function()
@@ -862,4 +681,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("Thank you for using PocketGUI")
+print("[PocketGUI] v25.1 Loaded! Steppers fixed.")
