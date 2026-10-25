@@ -1,4 +1,4 @@
--- PocketGUI v26.1 (SkidFling Kill All + Kill Player)
+-- PocketGUI v26.3 (SkidFling + Instant Kill + Custom P Logo)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -30,8 +30,8 @@ local function notify(title, text)
     end)
 end
 
--- SKIDFLING (Integrated)
-local function skidFling(TargetPlayer)
+-- SKIDFLING (Integrated + Instant Kill)
+local function skidFling(TargetPlayer, instantKill)
     if TargetPlayer == player then return end
     local Character = player.Character
     if not Character then return end
@@ -66,6 +66,11 @@ local function skidFling(TargetPlayer)
         local Angle = 0
         repeat
             if RootPart and THumanoid and THumanoid.Parent then
+                -- Instant Kill Logic added here
+                if instantKill and THumanoid.Health > 0 then
+                    THumanoid.Health = 0
+                end
+
                 if BasePart.Velocity.Magnitude < 50 then
                     Angle = Angle + 100
                     FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
@@ -151,12 +156,12 @@ local function skidFling(TargetPlayer)
     workspace.FallenPartsDestroyHeight = OldFPDH
 end
 
--- KILL ALL (Uses SkidFling)
+-- KILL ALL (Uses SkidFling with Instant Kill)
 local function killAll()
     local success = false
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
-            task.spawn(function() pcall(function() skidFling(plr) end) end)
+            task.spawn(function() pcall(function() skidFling(plr, true) end) end)
             success = true
         end
     end
@@ -558,7 +563,7 @@ local function refreshPlayerList()
             local tcr = Instance.new("UICorner"); tcr.CornerRadius = UDim.new(0,8); tcr.Parent = tpPlayerBtn
 
             killPlayerBtn.MouseButton1Click:Connect(function()
-                task.spawn(function() pcall(function() skidFling(plr) end) end)
+                task.spawn(function() pcall(function() skidFling(plr, true) end) end)
             end)
             tpPlayerBtn.MouseButton1Click:Connect(function() tpToPlayer(plr) end)
         end
@@ -569,19 +574,19 @@ Players.PlayerAdded:Connect(refreshPlayerList)
 Players.PlayerRemoving:Connect(refreshPlayerList)
 
 -- PAGE 4: MM2
-local killAllBtn = createAction(pageMM2, "Kill All (SkidFling)", 0, Color3.fromRGB(200, 30, 50))
+local killAllBtn = createAction(pageMM2, "Kill All (Instant)", 0, Color3.fromRGB(200, 30, 50))
 local mm2EspBtn, mm2EspBg, mm2EspKnob = createToggle(pageMM2, "Role ESP", 60)
 local mm2GunBtn = createAction(pageMM2, "Grab Gun", 120, Color3.fromRGB(40,80,120))
 
 killAllBtn.MouseButton1Click:Connect(function()
-    killAllBtn.Text = "Flinging..."
+    killAllBtn.Text = "Flinging & Killing..."
     local success = killAll()
     if success then
         killAllBtn.Text = "Killed All ✓"
     else
         killAllBtn.Text = "No Players!"
     end
-    task.delay(1.5, function() killAllBtn.Text = "Kill All (SkidFling)" end)
+    task.delay(1.5, function() killAllBtn.Text = "Kill All (Instant)" end)
 end)
 
 mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Text=s and "Teleported ✓" or "No Gun" task.delay(1.5,function() mm2GunBtn.Text="Grab Gun" end) end)
@@ -663,29 +668,70 @@ flySpeedPlus.MouseButton1Click:Connect(function()
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
--- SUPER COOL DRAGGABLE FLOATING BUTTON
+-- ==========================================
+-- SUPER COOL DRAGGABLE FLOATING BUTTON (New P Logo)
+-- ==========================================
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name="PocketGUI_Float"; floatGui.ResetOnSpawn=false; floatGui.DisplayOrder=1000; floatGui.Parent=pg
+
 local floatBtn = Instance.new("TextButton")
 floatBtn.Size = UDim2.new(0, 55, 0, 55); floatBtn.Position = UDim2.new(0, 20, 0.5, -27.5)
-floatBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 180); floatBtn.Text = ""; floatBtn.BorderSizePixel = 0; floatBtn.Parent = floatGui
-local fbCr = Instance.new("UICorner"); fbCr.CornerRadius = UDim.new(1, 0); fbCr.Parent = floatBtn
+floatBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255); floatBtn.Text = ""; floatBtn.BorderSizePixel = 0; floatBtn.AutoButtonColor = false; floatBtn.Parent = floatGui
+
+local fbCr = Instance.new("UICorner"); fbCr.CornerRadius = UDim.new(0, 14); fbCr.Parent = floatBtn -- Slightly squared off like the reference image
+
+-- The exact gradient from the image
 local fbGrad = Instance.new("UIGradient")
-fbGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 80, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 150, 255))}
+fbGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(165, 135, 255)), -- Light Purple
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 140, 255))   -- Soft Blue
+}
+fbGrad.Rotation = 45
 fbGrad.Parent = floatBtn
-local fbStroke = Instance.new("UIStroke"); fbStroke.Color = Color3.fromRGB(200, 180, 255); fbStroke.Thickness = 2; fbStroke.Transparency = 0.2; fbStroke.Parent = floatBtn
 
-local fbIcon = Instance.new("Frame"); fbIcon.Size = UDim2.new(0, 22, 0, 18); fbIcon.Position = UDim2.new(0.5, -11, 0.5, -9)
-fbIcon.BackgroundTransparency = 1; fbIcon.Parent = floatBtn
-for i = 0, 2 do
-    local line = Instance.new("Frame"); line.Size = UDim2.new(1, 0, 0, 3); line.Position = UDim2.new(0, 0, 0, i * 7)
-    line.BackgroundColor3 = Color3.fromRGB(255, 255, 255); line.BorderSizePixel = 0; line.Parent = fbIcon
-end
+local fbStroke = Instance.new("UIStroke"); fbStroke.Color = Color3.fromRGB(255, 255, 255); fbStroke.Thickness = 1.5; fbStroke.Transparency = 0.4; fbStroke.Parent = floatBtn
 
+-- The "P" Logo
+local pLogo = Instance.new("TextLabel")
+pLogo.Size = UDim2.new(1, 0, 1, -4); pLogo.Position = UDim2.new(0, 0, 0, -2)
+pLogo.BackgroundTransparency = 1
+pLogo.Text = "P"
+pLogo.TextColor3 = Color3.fromRGB(255, 255, 255)
+pLogo.Font = Enum.Font.GothamBlack
+pLogo.TextSize = 36
+pLogo.Parent = floatBtn
+
+-- Add a subtle drop shadow to the P to make it pop (similar to the image)
+local pShadow = pLogo:Clone()
+pShadow.TextColor3 = Color3.fromRGB(0, 0, 0)
+pShadow.TextTransparency = 0.8
+pShadow.Position = UDim2.new(0, 1, 0, 1)
+pShadow.ZIndex = 0
+pShadow.Parent = floatBtn
+pLogo.ZIndex = 1
+
+-- Hover & Click Animations for the floating button
+local defaultSize = UDim2.new(0, 55, 0, 55)
+local hoverSize = UDim2.new(0, 60, 0, 60)
+local clickSize = UDim2.new(0, 50, 0, 50)
+
+floatBtn.MouseEnter:Connect(function()
+    TweenService:Create(floatBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = hoverSize}):Play()
+end)
+floatBtn.MouseLeave:Connect(function()
+    TweenService:Create(floatBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = defaultSize}):Play()
+end)
+
+-- Dragging Logic
 local dragging, dragStart, startPos
 floatBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = input.Position; startPos = floatBtn.Position
+        dragging = true
+        dragStart = input.Position
+        startPos = floatBtn.Position
+        
+        -- Click animation
+        TweenService:Create(floatBtn, TweenInfo.new(0.1), {Size = clickSize}):Play()
     end
 end)
 floatBtn.InputChanged:Connect(function(input)
@@ -697,9 +743,15 @@ end)
 floatBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = false
+        
+        -- Reset size
+        TweenService:Create(floatBtn, TweenInfo.new(0.1), {Size = defaultSize}):Play()
+
         local delta = input.Position - dragStart
-        if delta.Magnitude < 10 then main.Visible = not main.Visible end
+        if delta.Magnitude < 10 then 
+            main.Visible = not main.Visible 
+        end
     end
 end)
 
-print("[PocketGUI] v26.1 Loaded! Kill All + Kill Player added.")
+print("[PocketGUI] v26.3 Loaded! Custom P logo applied to floating button.")
