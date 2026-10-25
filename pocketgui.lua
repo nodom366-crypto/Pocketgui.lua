@@ -1,4 +1,4 @@
--- PocketGUI v29.2 (Ultimate Brookhaven Invisibility)
+-- PocketGUI v29.4 (0.5 Ghost Invisibility)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -16,7 +16,7 @@ local state = {
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
     flySpeed=60, tpMode=false, skeletonEsp=false, selfChams=false, invisible=false,
     flyConn=nil, healthConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
-    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil, invisHealthConn=nil,
+    noclipConn=nil, speedConn=nil, jumpConn=nil, invisConn=nil,
     playerEspConn=nil, playerHighlights={}, skeletonConn=nil, skeletonDrawings={},
     selfChamsConn=nil, selfChamsHighlight=nil,
     mm2EspConn=nil, mm2Highlights={}, connections={},
@@ -104,7 +104,7 @@ local function enableTapTP(onButton)
     end))
 end
 
--- INVISIBILITY (THE FLICKER METHOD)
+-- INVISIBILITY (0.5 Ghost Mode)
 local function setInvisible(on)
     state.invisible = on
     if state.invisConn then state.invisConn:Disconnect() state.invisConn = nil end
@@ -112,38 +112,43 @@ local function setInvisible(on)
     local char = player.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
 
     if not on then
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.Transparency = 0
+                p.LocalTransparencyModifier = 0
+            end
+        end
         if hum then 
-            hum.CameraOffset = Vector3.zero 
             hum.DisplayName = player.DisplayName
             hum.NameDisplayDistance = 100
-            hum.HealthDisplayDistance = 100
         end
         return
     end
 
-    if not hum or not root then return end
+    for _, p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.Transparency = 0.5
+        elseif p:IsA("Decal") or p:IsA("Texture") then
+            p.Transparency = 0.5
+        end
+    end
 
-    hum.DisplayName = " "
-    hum.NameDisplayDistance = 0
-    hum.HealthDisplayDistance = 0
+    if hum then 
+        hum.DisplayName = " " 
+        hum.NameDisplayDistance = 0
+    end
 
-    -- The 60 FPS Flicker to hide from other players
-    state.invisConn = track(RunService.Heartbeat:Connect(function()
-        if not state.invisible or not hum or not root then return end
-        local OriginalCFrame = root.CFrame
-        local OriginalCameraOffset = hum.CameraOffset
-
-        local DownCFrame = OriginalCFrame * CFrame.new(0, -200000, 0)
-        root.CFrame = DownCFrame
-        hum.CameraOffset = DownCFrame:ToObjectSpace(CFrame.new(OriginalCFrame.Position)).Position
-
-        game:GetService("RunService").RenderStepped:Wait()
-
-        root.CFrame = OriginalCFrame
-        hum.CameraOffset = OriginalCameraOffset
+    state.invisConn = track(RunService.Stepped:Connect(function()
+        local c = player.Character
+        if c then
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") and p.Transparency ~= 0.5 then
+                    p.Transparency = 0.5
+                end
+            end
+        end
     end))
 end
 
@@ -590,7 +595,7 @@ local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(1
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -20, 0, 45); title.Position = UDim2.new(0, 20, 0, 5)
-title.BackgroundTransparency = 1; title.Text = "POCKETGUI v29.2"
+title.BackgroundTransparency = 1; title.Text = "POCKETGUI v29.4"
 title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBlack; title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = main
 local titleGrad = Instance.new("UIGradient")
