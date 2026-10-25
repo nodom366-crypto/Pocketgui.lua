@@ -1,4 +1,4 @@
--- PocketGUI v25.1 (Fixed Steppers + Egg Tab)
+-- PocketGUI v25.0 (Void Drop Kill Added)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -14,19 +14,17 @@ local state = {
     flying=false, noclip=false, walkSpeed=16, jumpPower=50,
     speedBoost=false, highJump=false, xray=false, playerEsp=false, mm2Esp=false, antiAfk=false,
     flySpeed=60, tpMode=false,
-    eggSteal=false, eggEsp=false, basePos=nil,
     flyConn=nil, bodyVelocity=nil, bodyGyro=nil, tpConn=nil,
     noclipConn=nil, speedConn=nil, jumpConn=nil,
     playerEspConn=nil, playerHighlights={}, 
-    mm2EspConn=nil, mm2Highlights={}, eggEspConn=nil, eggHighlights={}, 
-    connections={}
+    mm2EspConn=nil, mm2Highlights={}, connections={}
 }
 
 local function track(c) table.insert(state.connections, c) return c end
 local function getRoot() local c=player.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum() local c=player.Character return c and c:FindFirstChildOfClass("Humanoid") end
 
--- FLY (Joystick + Camera)
+-- FLY
 local function setFly(on)
     state.flying = on
     local char = player.Character
@@ -82,86 +80,22 @@ local function setFly(on)
     end)
 end
 
--- EGG STEAL LOOP
-local function startEggSteal()
-    state.eggSteal = true
-    local basePos = state.basePos
-    if not basePos then
-        print("[PocketGUI] Save Base Position first!")
-        return
+-- KILL FUNCTION (Void Drop)
+local function killPlayer(targetPlayer)
+    local targetChar = workspace:FindFirstChild(targetPlayer.Name)
+    if not targetChar then return false end
+    
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
+    if not targetRoot then return false end
+
+    -- Break joints so they can't recover
+    for _, v in ipairs(targetChar:GetDescendants()) do
+        if v:IsA("Motor6D") then v.Part0 = nil end
     end
-
-    task.spawn(function()
-        while state.eggSteal do
-            local root = getRoot()
-            local char = player.Character
-            if not root or not char then task.wait(1) continue end
-
-            local nearestEgg = nil
-            local shortestDist = math.huge
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and obj.Name:lower():find("egg") then
-                    local dist = (obj.Position - root.Position).Magnitude
-                    if dist < shortestDist then
-                        nearestEgg = obj
-                        shortestDist = dist
-                    end
-                end
-            end
-
-            if nearestEgg then
-                root.CFrame = CFrame.new(nearestEgg.Position + Vector3.new(0, 3, 0))
-                task.wait(0.5)
-                local prompt = nearestEgg:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then fireproximityprompt(prompt) else
-                    local click = nearestEgg:FindFirstChildOfClass("ClickDetector")
-                    if click then fireclickdetector(click) end
-                end
-                task.wait(0.5)
-                root.CFrame = CFrame.new(0, 100, 0)
-                task.wait(0.1)
-                root.CFrame = CFrame.new(0, 5, 0)
-                task.wait(2)
-                local prompt2 = nearestEgg:FindFirstChildOfClass("ProximityPrompt")
-                if prompt2 then fireproximityprompt(prompt2) else
-                    local click2 = nearestEgg:FindFirstChildOfClass("ClickDetector")
-                    if click2 then fireclickdetector(click2) end
-                end
-                task.wait(0.5)
-                root.CFrame = basePos + Vector3.new(0, 3, 0)
-                task.wait(1)
-            else
-                task.wait(1)
-            end
-        end
-    end)
-end
-
-local function stopEggSteal()
-    state.eggSteal = false
-end
-
--- EGG ESP
-local function setEggEsp(on)
-    state.eggEsp = on
-    if state.eggEspConn then state.eggEspConn:Disconnect() state.eggEspConn = nil end
-    for _, h in pairs(state.eggHighlights) do if h and h.Parent then h:Destroy() end end
-    state.eggHighlights = {}
-    if not on then return end
-    state.eggEspConn = track(RunService.Heartbeat:Connect(function()
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and obj.Name:lower():find("egg") then
-                if not state.eggHighlights[obj] then
-                    local hl = Instance.new("Highlight")
-                    hl.FillColor = Color3.fromRGB(255, 255, 0)
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 100)
-                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    hl.Parent = obj
-                    state.eggHighlights[obj] = hl
-                end
-            end
-        end
-    end))
+    
+    -- Drop them under the map
+    targetRoot.CFrame = targetRoot.CFrame - Vector3.new(0, 500, 0)
+    return true
 end
 
 -- CLICK TELEPORT
@@ -207,34 +141,32 @@ local function setNoclip(on)
     end
 end
 
--- SPEED BOOST (Fixed: Instant apply)
+-- SPEED BOOST
 local function setSpeedBoost(on)
     state.speedBoost=on
     if state.speedConn then state.speedConn:Disconnect() state.speedConn=nil end
-    local h = getHum()
     if not on then 
+        local h = getHum()
         if h then h.WalkSpeed = 16 end
         return 
     end
-    if h then h.WalkSpeed = state.walkSpeed end
     state.speedConn=track(RunService.Heartbeat:Connect(function()
-        local hh=getHum(); if hh then hh.WalkSpeed=state.walkSpeed end
+        local h=getHum(); if h then h.WalkSpeed=state.walkSpeed end
     end))
 end
 
--- HIGH JUMP (Fixed: Instant apply)
+-- HIGH JUMP
 local function setHighJump(on)
     state.highJump = on
     if state.jumpConn then state.jumpConn:Disconnect() state.jumpConn = nil end
-    local h = getHum()
     if not on then 
+        local h = getHum()
         if h then h.JumpPower = 50 end
         return 
     end
-    if h then h.JumpPower = state.jumpPower end
     state.jumpConn = track(RunService.Heartbeat:Connect(function()
-        local hh = getHum()
-        if hh then hh.JumpPower = state.jumpPower end
+        local h = getHum()
+        if h then h.JumpPower = state.jumpPower end
     end))
 end
 
@@ -414,13 +346,13 @@ local tabLayout = Instance.new("UIListLayout"); tabLayout.FillDirection = Enum.F
 
 local function createTab(text)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 75, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(30, 30, 42); btn.Text = text
+    btn.Size = UDim2.new(0, 75, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(30,30,42); btn.Text = text
     btn.TextColor3 = Color3.fromRGB(150, 150, 170); btn.Font = Enum.Font.GothamBold; btn.TextSize = 12; btn.BorderSizePixel = 0; btn.Parent = tabBar
     local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0, 10); cr.Parent = btn
     return btn
 end
 
-local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2"); local tabHuss = createTab("HUSS"); local tabEgg = createTab("EGG")
+local tabMove = createTab("MOVE"); local tabVisuals = createTab("VISUALS"); local tabPlayers = createTab("PLAYERS"); local tabMM2 = createTab("MM2"); local tabHuss = createTab("HUSS")
 
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -40, 1, -170); content.Position = UDim2.new(0, 20, 0, 110); content.BackgroundTransparency = 1; content.Parent = main
@@ -432,7 +364,7 @@ local function createPage()
     return p
 end
 
-local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage() local pageHuss=createPage() local pageEgg=createPage()
+local pageMove=createPage() local pageVisuals=createPage() local pagePlayers=createPage() local pageMM2=createPage() local pageHuss=createPage()
 
 local function createToggle(parent, text, posY)
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, -10, 0, 50); f.Position = UDim2.new(0, 0, 0, posY)
@@ -481,17 +413,16 @@ local flySpeedLabel, flySpeedMinus, flySpeedPlus = createStepper(pageMove, "Fly 
 local noclipBtn, noclipBg, noclipKnob = createToggle(pageMove, "Noclip", 120)
 local speedLabel, speedMinus, speedPlus = createStepper(pageMove, "WalkSpeed: 16", 180)
 local speedBtn, speedBg, speedKnob = createToggle(pageMove, "Apply Speed", 240)
-local jpLabel, jpMinus, jpPlus = createStepper(pageMove, "JumpPower: 50", 300)
-local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "Apply Jump", 360)
-local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 420)
-local resetBtn = createAction(pageMove, "Respawn (Reset)", 480, Color3.fromRGB(220, 60, 80))
+local highJumpBtn, highJumpBg, highJumpKnob = createToggle(pageMove, "High Jump", 300)
+local antiAfkBtn, antiAfkBg, antiAfkKnob = createToggle(pageMove, "Anti-AFK", 360)
+local resetBtn = createAction(pageMove, "Respawn (Reset)", 420, Color3.fromRGB(220, 60, 80))
 
 -- PAGE 2: VISUALS
 local tpBtn = createAction(pageVisuals, "Click Teleport", 0, Color3.fromRGB(80, 60, 180))
 local espBtn, espBg, espKnob = createToggle(pageVisuals, "Player ESP", 60)
 local xrayBtn, xrayBg, xrayKnob = createToggle(pageVisuals, "X-Ray", 120)
 
--- PAGE 3: PLAYERS
+-- PAGE 3: PLAYERS (with Kill button)
 local playerListFrame = Instance.new("Frame")
 playerListFrame.Size = UDim2.new(1, -10, 1, 0); playerListFrame.BackgroundTransparency = 1; playerListFrame.Parent = pagePlayers
 local playerLayout = Instance.new("UIListLayout"); playerLayout.Padding = UDim.new(0, 6); playerLayout.Parent = playerListFrame
@@ -506,16 +437,27 @@ local function refreshPlayerList()
             row.Size = UDim2.new(1, 0, 0, 50); row.BackgroundColor3 = Color3.fromRGB(28, 28, 38); row.Parent = playerListFrame
             local rcr = Instance.new("UICorner"); rcr.CornerRadius = UDim.new(0,10); rcr.Parent = row
             local nameLbl = Instance.new("TextLabel")
-            nameLbl.Size = UDim2.new(1, -120, 1, 0); nameLbl.Position = UDim2.new(0, 15, 0, 0)
+            nameLbl.Size = UDim2.new(1, -190, 1, 0); nameLbl.Position = UDim2.new(0, 15, 0, 0)
             nameLbl.BackgroundTransparency = 1; nameLbl.Text = plr.Name; nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
-            nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 14; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
+            nameLbl.Font = Enum.Font.GothamBold; nameLbl.TextSize = 13; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Parent = row
+
+            local killBtn = Instance.new("TextButton")
+            killBtn.Size = UDim2.new(0, 60, 1, -14); killBtn.Position = UDim2.new(1, -160, 0, 7)
+            killBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 60); killBtn.Text = "Kill"
+            killBtn.TextColor3 = Color3.fromRGB(255,255,255); killBtn.Font = Enum.Font.GothamBold; killBtn.TextSize = 12; killBtn.Parent = row
+            local kcr = Instance.new("UICorner"); kcr.CornerRadius = UDim.new(0,8); kcr.Parent = killBtn
 
             local tpPlayerBtn = Instance.new("TextButton")
             tpPlayerBtn.Size = UDim2.new(0, 85, 1, -14); tpPlayerBtn.Position = UDim2.new(1, -100, 0, 7)
             tpPlayerBtn.BackgroundColor3 = Color3.fromRGB(60,120,200); tpPlayerBtn.Text = "Teleport"
-            tpPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); tpPlayerBtn.Font = Enum.Font.GothamBold; tpPlayerBtn.TextSize = 13; tpPlayerBtn.Parent = row
+            tpPlayerBtn.TextColor3 = Color3.fromRGB(255,255,255); tpPlayerBtn.Font = Enum.Font.GothamBold; tpPlayerBtn.TextSize = 12; tpPlayerBtn.Parent = row
             local tcr = Instance.new("UICorner"); tcr.CornerRadius = UDim.new(0,8); tcr.Parent = tpPlayerBtn
 
+            killBtn.MouseButton1Click:Connect(function() 
+                local success = killPlayer(plr)
+                killBtn.Text = success and "Sent!" or "Failed"
+                task.delay(1.5, function() killBtn.Text = "Kill" end)
+            end)
             tpPlayerBtn.MouseButton1Click:Connect(function() tpToPlayer(plr) end)
         end
     end
@@ -530,7 +472,7 @@ local mm2KillBtn = createAction(pageMM2, "Kill All (Knife)", 60, Color3.fromRGB(
 local mm2GunBtn = createAction(pageMM2, "Grab Gun", 115, Color3.fromRGB(40,80,120))
 
 -- PAGE 5: HUSS VALLEY
-local hussMunkeBtn = createAction(pageHuss, "Load MunkeHub (Auto Melee/ESP)", 0, Color3.fromRGB(60, 160, 90))
+local hussMunkeBtn = createAction(pageHuss, "Load MunkeHub", 0, Color3.fromRGB(60, 160, 90))
 local hussDeltaBtn = createAction(pageHuss, "Load Delta Aim Assist", 60, Color3.fromRGB(60, 120, 200))
 
 hussMunkeBtn.MouseButton1Click:Connect(function()
@@ -540,20 +482,6 @@ hussDeltaBtn.MouseButton1Click:Connect(function()
     pcall(function() loadstring(game:HttpGet("https://pastefy.app/3pRyePB8/raw"))() end)
 end)
 
--- PAGE 6: EGG
-local eggStealBtn, eggStealBg, eggStealKnob = createToggle(pageEgg, "Auto Steal Loop", 0)
-local saveBaseBtn = createAction(pageEgg, "Save Base Position", 60, Color3.fromRGB(60, 120, 200))
-local eggEspBtn, eggEspBg, eggEspKnob = createToggle(pageEgg, "Egg ESP", 120)
-
-saveBaseBtn.MouseButton1Click:Connect(function()
-    local root = getRoot()
-    if root then
-        state.basePos = root.CFrame.Position
-        saveBaseBtn.Text = "Base Saved!"
-        task.delay(1.5, function() saveBaseBtn.Text = "Save Base Position" end)
-    end
-end)
-
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(1, -40, 0, 40); closeBtn.Position = UDim2.new(0, 20, 1, -55)
 closeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55); closeBtn.Text = "HIDE MENU"; closeBtn.TextColor3 = Color3.fromRGB(200,200,220)
@@ -561,8 +489,8 @@ closeBtn.Font = Enum.Font.GothamBlack; closeBtn.TextSize = 14; closeBtn.BorderSi
 local cbCr = Instance.new("UICorner"); cbCr.CornerRadius = UDim.new(0,10); cbCr.Parent = closeBtn
 closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
 
-local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabHuss, tabEgg}
-local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageHuss, pageEgg}
+local allTabs = {tabMove, tabVisuals, tabPlayers, tabMM2, tabHuss}
+local allPages = {pageMove, pageVisuals, pagePlayers, pageMM2, pageHuss}
 
 local function selectTab(index)
     for i = 1, #allTabs do
@@ -599,12 +527,6 @@ mm2EspBtn.MouseButton1Click:Connect(function() setMM2Esp(not state.mm2Esp) anima
 antiAfkBtn.MouseButton1Click:Connect(function() setAntiAfk(not state.antiAfk) animateToggle(antiAfkBg, antiAfkKnob, state.antiAfk) end)
 highJumpBtn.MouseButton1Click:Connect(function() setHighJump(not state.highJump) animateToggle(highJumpBg, highJumpKnob, state.highJump) end)
 
-eggStealBtn.MouseButton1Click:Connect(function()
-    if state.eggSteal then stopEggSteal() else startEggSteal() end
-    animateToggle(eggStealBg, eggStealKnob, state.eggSteal)
-end)
-eggEspBtn.MouseButton1Click:Connect(function() setEggEsp(not state.eggEsp) animateToggle(eggEspBg, eggEspKnob, state.eggEsp) end)
-
 tpBtn.MouseButton1Click:Connect(function() enableTapTP(tpBtn) end)
 resetBtn.MouseButton1Click:Connect(function() respawnPlayer() end)
 
@@ -614,23 +536,10 @@ mm2GunBtn.MouseButton1Click:Connect(function() local s=mm2GrabGun() mm2GunBtn.Te
 speedMinus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed - 5, 16, 500)
     speedLabel.Text = "WalkSpeed: " .. state.walkSpeed
-    local h = getHum(); if h and state.speedBoost then h.WalkSpeed = state.walkSpeed end
 end)
 speedPlus.MouseButton1Click:Connect(function()
     state.walkSpeed = math.clamp(state.walkSpeed + 5, 16, 500)
     speedLabel.Text = "WalkSpeed: " .. state.walkSpeed
-    local h = getHum(); if h and state.speedBoost then h.WalkSpeed = state.walkSpeed end
-end)
-
-jpMinus.MouseButton1Click:Connect(function()
-    state.jumpPower = math.clamp(state.jumpPower - 5, 0, 500)
-    jpLabel.Text = "JumpPower: " .. state.jumpPower
-    local h = getHum(); if h and state.highJump then h.JumpPower = state.jumpPower end
-end)
-jpPlus.MouseButton1Click:Connect(function()
-    state.jumpPower = math.clamp(state.jumpPower + 5, 0, 500)
-    jpLabel.Text = "JumpPower: " .. state.jumpPower
-    local h = getHum(); if h and state.highJump then h.JumpPower = state.jumpPower end
 end)
 
 flySpeedMinus.MouseButton1Click:Connect(function()
@@ -642,7 +551,7 @@ flySpeedPlus.MouseButton1Click:Connect(function()
     flySpeedLabel.Text = "Fly Speed: " .. state.flySpeed
 end)
 
--- FLOATING BUTTON
+-- SUPER COOL DRAGGABLE FLOATING BUTTON
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name="PocketGUI_Float"; floatGui.ResetOnSpawn=false; floatGui.DisplayOrder=1000; floatGui.Parent=pg
 local floatBtn = Instance.new("TextButton")
@@ -681,4 +590,4 @@ floatBtn.InputEnded:Connect(function(input)
     end
 end)
 
-print("[PocketGUI] v25.1 Loaded! Steppers fixed.")
+print("[PocketGUI] v25.0 Loaded! Kill button added.")
